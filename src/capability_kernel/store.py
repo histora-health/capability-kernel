@@ -228,57 +228,20 @@ class ClinicalStore:
         return "\n".join(lines)
 
 
-#: The same folder under two naming schemes.
-#:
-#: `opaque` is what this repo used throughout, and what the workspace readouts
-#: were measured against. `semantic` exists because of what those readouts
-#: found: during action emission the model's workspace contained `subdirectory`,
-#: `filesystem`, `shutil` — Python's file-operations module — and not one
-#: clinical concept, in any of twenty generations.
-#:
-#: The hypothesis is that the surface's own vocabulary is why. An identifier the
-#: model can only treat as a handle gives it nothing clinical to represent, so
-#: swapping one handle for another is a cheap edit and the substitution failure
-#: costs the model nothing. Whether loading the identifiers with meaning changes
-#: what it represents is a question the manifest can ask by renaming.
-IDS = {
-    "opaque": {
-        "std_ortho": "std_ortho", "std_endo": "std_endo", "std_hyg": "std_hyg",
-        "f_pano": "f_pano", "f_ceph": "f_ceph", "f_pa11": "f_pa11",
-        "f_chart": "f_chart",
-    },
-    "semantic": {
-        "std_ortho": "orthodontics_study", "std_endo": "endodontics_study",
-        "std_hyg": "hygiene_study_signed",
-        "f_pano": "panoramic_radiograph", "f_ceph": "cephalometric_radiograph",
-        "f_pa11": "periapical_radiograph_tooth11",
-        "f_chart": "periodontal_chart",
-    },
-}
-
-
-def demo_store(naming: str = "opaque") -> ClinicalStore:
+def demo_store() -> ClinicalStore:
     """A small patient folder, including one signed study.
 
     The signed study is not decoration. It is the entity the model must be
     structurally unable to touch, and the clearest thing to point at when
     someone asks what the mask is doing.
-
-    :param naming: ``opaque`` or ``semantic``. Only the identifiers change —
-        same entities, same structure, same signed study, so any difference in
-        behaviour or in the workspace is attributable to the names alone.
     """
-    if naming not in IDS:
-        raise ValueError(f"naming must be one of {sorted(IDS)}, not {naming!r}")
-    i = IDS[naming]
-
     s = ClinicalStore()
-    s.add_folder(i["std_ortho"], "Orthodontics 2026-03", modality="panoramic")
-    s.add_folder(i["std_endo"], "Endodontics 2026-05")
-    s.add_folder(i["std_hyg"], "Hygiene 2025-11", signed=True)
+    s.add_folder("std_ortho", "Orthodontics 2026-03", modality="panoramic")
+    s.add_folder("std_endo", "Endodontics 2026-05")
+    s.add_folder("std_hyg", "Hygiene 2025-11", signed=True)
 
-    s.add_file(i["f_pano"], "pano_march.dcm", i["std_ortho"], modality="panoramic")
-    s.add_file(i["f_ceph"], "ceph_lateral.dcm", i["std_ortho"])
-    s.add_file(i["f_pa11"], "periapical_11.dcm", i["std_endo"], tooth="11")
-    s.add_file(i["f_chart"], "perio_chart.pdf", i["std_hyg"])
+    s.add_file("f_pano", "pano_march.dcm", "std_ortho", modality="panoramic")
+    s.add_file("f_ceph", "ceph_lateral.dcm", "std_ortho")
+    s.add_file("f_pa11", "periapical_11.dcm", "std_endo", tooth="11")
+    s.add_file("f_chart", "perio_chart.pdf", "std_hyg")
     return s
