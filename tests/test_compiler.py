@@ -181,11 +181,35 @@ def test_only_the_manifest_methods_are_reachable_at_the_first_choice(store, tk):
         "declining is reachable from every action, or refusing means acting wrongly"
 
 
-def test_a_signed_study_has_no_path_through_the_trie(store, tk):
-    """Absence, at the level that matters: not refused downstream, unreachable."""
+def test_a_signed_study_can_be_named_but_not_acted_on(store, tk):
+    """The invariant, stated exactly.
+
+    It is not "a closed record has no path through the trie" — it has one, and
+    that is deliberate. Making it unnameable is what caused the model to rename
+    a *different* study when told to rename this one. The invariant is that
+    every path mentioning it terminates in decline.
+    """
+    from capability_kernel.manifest import VIRTUAL
+
     surf = compile_surface(store, tk.tokenize)
-    assert not any("std_hyg" in text for text, _ in surf.trie.opcodes)
-    assert not any("f_chart" in text for text, _ in surf.trie.opcodes)
+    mentions = [(text, label) for text, label in surf.trie.opcodes
+                if "std_hyg" in text or "f_chart" in text]
+
+    assert mentions, "a closed record must be nameable, or it gets substituted"
+    assert all(label in VIRTUAL for _, label in mentions), \
+        "naming a closed record may only lead to declining"
+
+
+def test_no_action_can_be_taken_on_a_signed_study(store, tk):
+    """The half of the old invariant that still holds, and must."""
+    from capability_kernel.manifest import VIRTUAL
+
+    surf = compile_surface(store, tk.tokenize)
+    for text, label in surf.trie.opcodes:
+        if label in VIRTUAL:
+            continue
+        assert "std_hyg" not in text
+        assert "f_chart" not in text
 
 
 def test_delete_cannot_be_spelled(store, tk):
@@ -195,12 +219,19 @@ def test_delete_cannot_be_spelled(store, tk):
 
 
 def test_the_world_moving_moves_the_trie(store, tk):
+    from capability_kernel.manifest import VIRTUAL
+
     before = compile_surface(store, tk.tokenize)
     store.get("std_endo").signed = True
     after = compile_surface(store, tk.tokenize)
 
     assert len(after.trie) < len(before.trie)
-    assert not any("std_endo" in text for text, _ in after.trie.opcodes)
+    # Actions on it are gone; the ability to say its name is not, so that a
+    # request about it can be declined by name rather than redirected.
+    assert not any("std_endo" in text for text, label in after.trie.opcodes
+                   if label not in VIRTUAL)
+    assert any("std_endo" in text for text, label in after.trie.opcodes
+               if label in VIRTUAL)
 
 
 def test_a_free_text_argument_becomes_a_slot(store, tk):
