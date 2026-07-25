@@ -183,6 +183,24 @@ class ClinicalStore:
             return list(self.files_in(entity.folder_id))
         return list(self._folders.values())
 
+    def snapshot(self) -> tuple:
+        """Everything an action could change, comparable by equality.
+
+        Used to tell a real action from a legal no-op. The mask guarantees an
+        action is in the surface; nothing guarantees it does anything, and a
+        model denied what it wanted will happily rename a file to the name it
+        already has — observed five times in a row.
+
+        Not the journal: the journal records that a rename was attempted, which
+        is exactly the thing being distinguished from.
+        """
+        return (
+            tuple((f.id, f.name, f.signed, tuple(sorted(f.metadata.items())))
+                  for f in self._folders.values()),
+            tuple((f.id, f.name, f.folder_id, tuple(sorted(f.metadata.items())))
+                  for f in self._files.values()),
+        )
+
     def describe(self) -> str:
         """A compact view for the model's context."""
         lines = []

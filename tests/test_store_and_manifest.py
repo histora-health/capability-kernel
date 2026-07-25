@@ -156,3 +156,30 @@ def test_the_surface_is_small_enough_to_enumerate(store):
     """Enumeration has a ceiling. Watching the number is how you find out
     before a demo does."""
     assert max(surface_size(store).values()) < 512
+
+
+# ── Telling a real action from a legal no-op ─────────────────────────────────
+
+
+def test_a_snapshot_changes_only_when_something_changed(store):
+    """The bound on the loop the mask cannot prevent.
+
+    Renaming a file to the name it already has is a fully legal opcode. The
+    surface has no reason to exclude it, so the chat loop has to notice it
+    another way.
+    """
+    before = store.snapshot()
+    store.rename("f_pano", store.get("f_pano").name)
+    assert store.snapshot() == before, "a rename to the same name changed nothing"
+
+    store.rename("f_pano", "different.dcm")
+    assert store.snapshot() != before
+
+
+def test_the_snapshot_sees_every_kind_of_change(store):
+    for act in (lambda: store.rename("f_pano", "x.dcm"),
+                lambda: store.move("f_pano", "std_endo"),
+                lambda: store.set_metadata("f_pano", "stage", "pre-op")):
+        before = store.snapshot()
+        act()
+        assert store.snapshot() != before

@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
-from .manifest import MANIFEST, legal_values, tool_schemas
+from .manifest import MANIFEST, VIRTUAL, legal_values, tool_schemas
 from .store import ClinicalStore, StoreError
 
 SYSTEM = """\
@@ -193,6 +193,9 @@ class Harness:
         if missing:
             v = Violation("missing_argument", name, args, f"missing {sorted(missing)}")
             return f"error: missing arguments {sorted(missing)}", v
+
+        if name in VIRTUAL:
+            return args.get("reason", "no action taken"), None
 
         try:
             return getattr(self.store, name)(**args), None
