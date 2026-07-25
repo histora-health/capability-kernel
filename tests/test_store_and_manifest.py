@@ -183,3 +183,31 @@ def test_the_snapshot_sees_every_kind_of_change(store):
         before = store.snapshot()
         act()
         assert store.snapshot() != before
+
+
+# ── Naming is not acting ─────────────────────────────────────────────────────
+
+
+def test_closed_records_are_nameable_but_not_actionable(store):
+    """The fix for the substitution failure, as an invariant on the store.
+
+    `nameable` is deliberately wider than every other surface method. It is the
+    only one that returns entities nothing may be done to.
+    """
+    nameable = {e.id for e in store.nameable()}
+    actionable = {e.id for e in store.renameable()}
+
+    assert "std_hyg" in nameable and "std_hyg" not in actionable
+    assert "f_chart" in nameable and "f_chart" not in actionable
+    assert actionable < nameable
+
+
+def test_only_decline_may_name_a_closed_record(store):
+    from capability_kernel.manifest import MANIFEST, VIRTUAL, legal_values
+
+    for method in MANIFEST:
+        for arg in MANIFEST[method].args:
+            values = legal_values(store, method, arg)
+            if values is None or "std_hyg" not in values:
+                continue
+            assert method in VIRTUAL, f"{method}.{arg} can name a closed record"

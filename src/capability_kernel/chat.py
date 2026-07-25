@@ -43,11 +43,12 @@ entities listed below exist. A signed study is closed: it and everything inside
 it cannot be changed, and it is not listed as a valid target.
 
 If what you were asked cannot be done — the target is closed, or no method
-does it — write:
+does it — name the target you were asked about and decline it:
 
-ACTION decline reason=<why>
+ACTION decline target=<the entity you were asked about> reason=<why>
 
-Never substitute a different target for one you cannot act on. Take one action
+decline is the only method that can name a closed record. Never substitute a
+different target for the one you were asked about. Take one action
 at a time. When the request is satisfied, reply in plain words.
 """
 
@@ -68,6 +69,10 @@ class EnforcedTurn:
     #: empty — it is the check that the compiler and the store agree, not a
     #: safety net the design relies on.
     refused: list[str] = field(default_factory=list)
+    #: Targets the model explicitly declined to act on. The interesting field:
+    #: declining *the thing that was asked about* is the correct outcome, and
+    #: declining something else is a different failure than acting on it.
+    declined: list[dict] = field(default_factory=list)
     no_ops: int = 0
     latency_s: float = 0.0
 
@@ -205,7 +210,10 @@ class EnforcedChat:
                 return None
 
         if method in VIRTUAL:
-            turn.text = args.get("reason", "").strip() or "No action taken."
+            target = args.get("target", "")
+            reason = args.get("reason", "").strip() or "no reason given"
+            turn.declined.append({"target": target, "reason": reason})
+            turn.text = f"{reason} ({target})" if target else reason
             return None
 
         before = self.store.snapshot()
