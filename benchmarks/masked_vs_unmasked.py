@@ -1,9 +1,10 @@
 """Does the mask help a local model, and does the help relate to security?
 
-The comparison every earlier benchmark here failed to make cleanly: the same
-model, the same runtime, the same prompts and bounds, with enforcement as the
-only difference. `two_arm.py` compared them but only on gemma4:12b through
-llama.cpp; `substitution.py` measured enforced arms only.
+The comparison, made cleanly: the same model, the same runtime, the same prompts
+and bounds, with enforcement as the only difference. Earlier attempts at this in
+the repository each got one half — one held the model fixed but only for
+gemma4:12b through llama.cpp, another measured enforced arms only — and have
+been removed rather than left to be mistaken for this.
 
 Both local models are covered, each in the runtime that can actually run it:
 
