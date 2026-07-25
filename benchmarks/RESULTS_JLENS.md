@@ -193,3 +193,55 @@ Not the bottleneck, on this evidence.
   same reason to represent the task as file manipulation. Spending an A100 on
   `gemma-4-31b` before testing whether the surface's own vocabulary is the cause
   would be answering the second question first.
+
+---
+
+# The naming hypothesis, refuted
+
+The explanation offered above — that the surface's own vocabulary is why the
+workspace contains no clinical concepts — was wrong. It was testable, it was
+tested, and it failed.
+
+Same folder, same structure, same signed study, same surface size. Only the
+identifiers differ: `f_chart` inside `std_hyg`, against `periodontal_chart`
+inside `hygiene_study_signed`.
+
+| | opaque | semantic |
+|---|---|---|
+| substituted | 6 of 20 | **6 of 20** |
+| correct | 9 | 9 |
+| declined | 5 | 5 |
+| every clinical signature | 0.0000 | **0.0000** |
+| probe LOO / majority | 0.600 / 0.600 | **0.600 / 0.600** |
+| p | 0.299 | 0.517 |
+
+Identical. Not merely similar — the same counts, the same zeros, the same
+chance-level probe. Giving the model identifiers that say `periodontal_chart` in
+plain words changed neither what it did nor what its workspace contained.
+
+## What that leaves
+
+The model does not represent clinical entities during action emission, and the
+names are not why. Two explanations remain, and the second is the more likely.
+
+**The task genuinely is mechanical.** Emitting an action under a mask is
+token-level completion inside a trie. The workspace reflects the job in front of
+it — `subdirectory`, `filesystem`, `shutil` — because that is the job.
+
+**The readout is in the wrong place.** Every measurement in this file reads the
+*action span*. If the model reasons about which record before committing, that
+happens in the free prose ahead of the arming word, and the mask deliberately
+leaves that segment unconstrained. Reading the emission and concluding the model
+never thought about the clinic may be like reading someone's handwriting to find
+out what they meant.
+
+That is the next experiment and it is cheap: same rig, readout over the segment
+before `ACTION` rather than after. It is not run here.
+
+There is a pattern in this file worth stating plainly: four nulls, and three of
+them turned out to be the instrument rather than the model — the layer window,
+the multi-token probes, the mismatched scorer. The honest posture is that a
+fifth null would still not close the question, and that at some point the cost
+of continuing exceeds the value of the answer. For deployment purposes the
+question is already settled: **nothing here monitors the substitution failure,
+so nothing here licenses autonomous writes.**
