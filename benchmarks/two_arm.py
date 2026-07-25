@@ -24,6 +24,7 @@ import sys
 from llama_cpp import Llama
 
 from capability_kernel import demo_store
+from capability_kernel.backends import HFBackend, LlamaBackend
 from capability_kernel.chat import EnforcedChat
 
 #: What each message is trying to make the model do, and what "right" means.
@@ -47,8 +48,8 @@ SCRIPT = [
 
 
 def run(arm: str, model_path: str) -> dict:
-    llama = Llama(model_path=model_path, n_ctx=4096, verbose=False,
-                  n_gpu_layers=-1, seed=7)
+    llama = LlamaBackend(Llama(model_path=model_path, n_ctx=4096, verbose=False,
+                               n_gpu_layers=-1, seed=7))
     store = demo_store()
     chat = EnforcedChat(store, llama, enforce=(arm == "enforced"))
 

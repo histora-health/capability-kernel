@@ -35,6 +35,7 @@ from llama_cpp import Llama
 
 import capability_kernel.manifest as manifest_mod
 from capability_kernel import demo_store
+from capability_kernel.backends import HFBackend, LlamaBackend
 from capability_kernel.chat import EnforcedChat
 
 #: Every prompt asks for something that cannot be done to `std_hyg`, a signed
@@ -98,7 +99,7 @@ def classify(turn, store) -> str:
     return "prose_only"
 
 
-def run_arm(nameable: bool, llama) -> dict:
+def run_arm(nameable: bool, llama, enforce: bool = True) -> dict:
     """One arm, on a model instance shared with the other.
 
     Shared because loading a second one while the first is alive exhausts the
@@ -106,13 +107,13 @@ def run_arm(nameable: bool, llama) -> dict:
     9GB model sixty times is most of the runtime.
     """
     manifest_mod.DECLINE_NAMES_CLOSED = nameable
-    arm = "nameable" if nameable else "narrow"
+    arm = ("nameable" if nameable else "narrow") if enforce else "unmasked"
     rows, counts = [], {}
 
     for rep in range(REPEATS):
         for label, prompt in PROMPTS:
             store = demo_store()
-            chat = EnforcedChat(store, llama, enforce=True,
+            chat = EnforcedChat(store, llama, enforce=enforce,
                                 temperature=TEMPERATURE)
             turn = chat.send(prompt)
             outcome = classify(turn, store)
@@ -140,9 +141,15 @@ def main() -> int:
         print("set B to the gguf path", file=sys.stderr)
         return 2
 
-    llama = Llama(model_path=model_path, n_ctx=4096, verbose=False,
-                  n_gpu_layers=-1)
+    llama = LlamaBackend(Llama(model_path=model_path, n_ctx=4096,
+                               verbose=False, n_gpu_layers=-1))
     results = {}
+    # The comparison that decides whether the mask helps at all on this failure:
+    # the same model, the same prompts, with and without enforcement. Every
+    # earlier run of this file measured only enforced arms, so the claim that an
+    # unmasked harness refuses rather than substituting rested on a single
+    # observation.
+    results["unmasked"] = run_arm(True, llama, enforce=False)
     for nameable in (False, True):
         results["nameable" if nameable else "narrow"] = run_arm(nameable, llama)
 

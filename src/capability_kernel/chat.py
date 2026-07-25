@@ -80,6 +80,9 @@ class EnforcedTurn:
 class EnforcedChat:
     """Chat over a store where every action is generated under the mask.
 
+    :param backend: where generation happens — `LlamaBackend` or `HFBackend`.
+        Both arms must use the same one, or a difference between them is a
+        difference of runtime.
     :param enforce: whether the mask is applied. False runs the identical code
         path — same model, same runtime, same prompt, same store, same parsing —
         with the logits processor omitted, which is the only way to attribute a
@@ -93,11 +96,11 @@ class EnforcedChat:
         failure repeated five times.
     """
 
-    def __init__(self, store: ClinicalStore, llama, *, enforce: bool = True,
+    def __init__(self, store: ClinicalStore, backend, *, enforce: bool = True,
                  max_actions: int = 6, max_no_ops: int = 2,
                  max_tokens: int = 256, temperature: float = 0.0) -> None:
         self.store = store
-        self.llama = llama
+        self.backend = backend
         self.enforce = enforce
         self.violations: list[Violation] = []
         self.max_actions = max_actions
@@ -112,10 +115,10 @@ class EnforcedChat:
     # ── Tokenizer plumbing ───────────────────────────────────────────────────
 
     def _tokenize(self, text: str) -> list[int]:
-        return self.llama.tokenize(text.encode(), add_bos=False, special=False)
+        return self.backend.tokenize(text)
 
     def _detokenize(self, tokens: list[int]) -> str:
-        return self.llama.detokenize(list(tokens)).decode("utf-8", "replace")
+        return self.backend.detokenize(tokens)
 
     def _recompile(self) -> CompiledSurface:
         """Rebuild the surface from the world as it is now.
@@ -140,8 +143,6 @@ class EnforcedChat:
     # ── The loop ─────────────────────────────────────────────────────────────
 
     def send(self, user_message: str) -> EnforcedTurn:
-        from llama_cpp import LogitsProcessorList
-
         turn = EnforcedTurn()
         started = time.time()
         prompt = self._prompt(user_message)
@@ -149,16 +150,22 @@ class EnforcedChat:
 
         while len(turn.actions) < self.max_actions:
             surface = self._recompile()
-            proc = CapabilityProcessor(surface, ARM, self._detokenize,
-                                       self._tokenize(CLOSE),
-                                       telemetry=self.telemetry)
+            # transformers hands the processor batched tensors and llama.cpp
+            # hands it numpy, so the wrapper has to match the backend. Both wrap
+            # the same CapabilityProcessor — the decision procedure is one copy.
+            if type(self.backend).__name__ == "HFBackend":
+                from .hf import HFCapabilityProcessor
+                proc = HFCapabilityProcessor(surface, self.backend.tokenizer,
+                                             telemetry=self.telemetry)
+            else:
+                proc = CapabilityProcessor(surface, ARM, self._detokenize,
+                                           self._tokenize(CLOSE),
+                                           telemetry=self.telemetry)
 
-            out = self.llama(prompt, max_tokens=self.max_tokens,
-                             temperature=self.temperature,
-                             stop=[CLOSE + CLOSE, "User:"],
-                             logits_processor=(LogitsProcessorList([proc])
-                                               if self.enforce else None))
-            text = out["choices"][0]["text"]
+            text = self.backend.generate(
+                prompt, processor=proc if self.enforce else None,
+                max_tokens=self.max_tokens, temperature=self.temperature,
+                stop=[CLOSE + CLOSE, "User:"])
 
             if proc.desynchronised:
                 # The mask stopped applying mid-action. Anything generated from
