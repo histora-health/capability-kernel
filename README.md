@@ -90,9 +90,6 @@ useful than implying the mechanism covers it.
 
 ## Where this goes
 
-- **[docs/HISTORA.md](docs/HISTORA.md)** — where each mechanism applies in a
-  clinical records product, what it costs, and what would make it the wrong
-  call. Ordered by how soon it could ship.
 - **[docs/BADMEMORY.md](docs/BADMEMORY.md)** — against *Bad Memory* (arXiv
   2607.14611). Their two overt attack goals are unemittable here; their third —
   the one that "resembles a legitimate user preference" — is the same failure
