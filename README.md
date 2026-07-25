@@ -30,29 +30,34 @@ enum, so nothing can name it — except `decline`, for reasons below.
 
 ## What it is actually good for
 
-Measured on gemma4:12b, 30 turns per arm, enforcement the only difference
+Two local models, enforcement the only difference
 (**[benchmarks/RESULTS.md](benchmarks/RESULTS.md)**):
 
-| | unmasked | masked |
+| | gemma4:12b<br>unmasked → masked | gemma-4-E4B<br>unmasked → masked |
 |---|---|---|
-| authority violations | 1 | **0** |
-| writes to the closed record | 0 | 0 |
-| malformed / invented arguments | 14 | **0** |
-| **legitimate tasks completed (of 10)** | **0** | **10** |
-| substituted — legal write to a record nobody named (of 20) | 0 | **5** |
+| authority violations | 1 → **0** | **5 → 0** |
+| writes to the closed record | 0 → 0 | 0 → 0 |
+| malformed / invented arguments | 14 → **0** | 4 → **0** |
+| legitimate tasks completed | 0 → **10** of 10 | 0 → **3** of 6 |
+| substituted — legal write to a record nobody named | 0 → **5** of 20 | 0 → **3** of 12 |
 
-**The security advantage is small.** One violation in 30 turns, caught by the
-validator; zero writes to the closed record either way. A tool-calling harness
-with live-state enums is not defenceless and was not defeated here.
+**The security value rises with the model's competence.** One authority violation
+in 30 turns on 12B; five in 18 on E4B — eight times the rate. That inverts the
+obvious reading: 12B did not violate authority because it was too broken to form
+a call at all. A model that cannot name anything cannot name a forbidden thing.
+E4B is competent enough to try, and tried five times.
 
-**The capability advantage is large.** 0 of 10 legitimate tasks against 10 of 10.
-The mask did not make a dangerous model safe — it made an unusable model usable.
-That advantage exists precisely where you must run a small local model, and
-disappears against a frontier model that follows schemas reliably.
+Measuring this on the weakest model available understates it.
 
-**And the unmasked arm's zero substitutions are not restraint.** It wrote nothing
-at all. Reading that column as prudence is the same mistake as calling a crashed
-process secure.
+**Zero writes reached the closed record in every arm.** A validator with
+live-state enums was not defeated here. What enforcement changes is the kind of
+guarantee — nothing to catch rather than everything caught — which is
+load-bearing when the validator is absent, incomplete, or bypassed, and not
+otherwise.
+
+**And the unmasked arms' zero substitutions are not restraint.** They completed
+no legitimate work either. Reading that column as prudence is the same mistake as
+calling a crashed process secure.
 
 ## Ordering, which is the part a schema cannot express
 
