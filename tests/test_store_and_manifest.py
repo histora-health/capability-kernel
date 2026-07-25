@@ -270,3 +270,20 @@ def test_both_arms_see_the_same_narrowing(store):
     phase controller rather than the mask."""
     store.move("f_pano", "std_endo")
     assert [t["function"]["name"] for t in tool_schemas(store)] == ["audit"]
+
+
+def test_auditing_does_not_count_as_progress():
+    """The bound on repetition has to survive the ordering rule.
+
+    Every write must be audited, and every audit changes the journal — so
+    counting an audit as progress resets the no-op counter and a model can loop
+    write/audit/write/audit forever. Measured on gemma-4-E4B: the same
+    set_metadata with the same audit note, three times.
+    """
+    import inspect
+
+    from capability_kernel import chat
+
+    src = inspect.getsource(chat.EnforcedChat.send)
+    assert 'executed.method != "audit"' in src, \
+        "an audit must not reset the consecutive no-op counter"

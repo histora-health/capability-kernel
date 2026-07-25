@@ -214,8 +214,15 @@ class EnforcedChat:
                 break
             turn.actions.append(executed)
 
-            if executed.changed:
+            # Auditing always changes the journal, so counting it as progress
+            # lets a model loop write/audit/write/audit indefinitely — the
+            # counter resets on every audit. Measured on gemma-4-E4B: the same
+            # set_metadata and the same audit note, three times, because each
+            # audit cleared the evidence that the write before it was a no-op.
+            if executed.changed and executed.method != "audit":
                 consecutive_no_ops = 0
+            elif executed.method == "audit":
+                pass  # neither progress nor a no-op; it is bookkeeping
             else:
                 consecutive_no_ops += 1
                 turn.no_ops += 1
