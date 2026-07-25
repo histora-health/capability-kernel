@@ -96,7 +96,9 @@ class CapabilityProcessor:
     """A llama.cpp ``LogitsProcessor`` that enforces the compiled surface.
 
     :param surface: the compiled trie, rebuilt whenever the world moves.
-    :param open_tokens: the token sequence that hands control to the mask.
+    :param arm: the word that hands control to the mask. Matched against decoded
+        text rather than a token sequence, because how it tokenizes depends on
+        what precedes it and the model picks that.
     :param detokenize: needed for slots — whether a token is legal inside a free
         argument depends on what it *says*, which only the tokenizer knows.
     :param enabled: opcode indices the phase controller currently permits. None
@@ -105,33 +107,36 @@ class CapabilityProcessor:
         validate moves and reject them, it compiles a trie without them.
     """
 
-    def __init__(self, surface: CompiledSurface, open_tokens: list[int],
+    def __init__(self, surface: CompiledSurface, arm: str,
                  detokenize, enabled: set[int] | None = None,
                  telemetry: Telemetry | None = None) -> None:
         self.surface = surface
-        self.open_tokens = list(open_tokens)
+        self.arm = arm
         self.detokenize = detokenize
         self.enabled = enabled if enabled is not None else surface.all_indices
         self.telemetry = telemetry if telemetry is not None else Telemetry()
 
-        self._path: list[int] = []      # tokens consumed inside the current action
+        # None means "not armed"; [] means "armed, at the root". The two are
+        # different states and conflating them disarms the mask on the very
+        # step that arms it.
+        self._path: list[int] | None = None
         self._prompt_len: int | None = None
 
     # ── State ────────────────────────────────────────────────────────────────
 
     @property
     def active(self) -> bool:
-        return bool(self._path)
+        return self._path is not None
 
     def reset(self) -> None:
-        self._path, self._prompt_len = [], None
+        self._path, self._prompt_len = None, None
 
     def _generated(self, input_ids) -> list[int]:
         if self._prompt_len is None:
             self._prompt_len = len(input_ids)
         return list(input_ids[self._prompt_len:])
 
-    def _locate(self, gen: list[int]) -> list[int]:
+    def _locate(self, gen: list[int]) -> list[int] | None:
         """Where the current action starts, derived from what was generated.
 
         Deliberately not tracked incrementally. llama.cpp does not tell a
@@ -139,24 +144,33 @@ class CapabilityProcessor:
         needs the caller to feed every token back — two sources of truth that
         drift the moment anything retries, rewinds or batches. ``input_ids``
         already carries the answer.
+
+        The arming word is found by decoding rather than by matching token ids.
+        On gemma4 the same word tokenizes differently after a newline than
+        after ``<channel|>``, and matching ids missed the second — which let a
+        whole ``delete`` line through unmasked.
         """
-        n = len(self.open_tokens)
-        for i in range(len(gen) - n, -1, -1):
-            if gen[i:i + n] == self.open_tokens:
-                path = gen[i:]
-                # A finished action releases the mask; prose after it is free
-                # until the model spells the frame again.
-                return [] if self.surface.trie.is_complete(path) else path
-        return []
+        for i in range(len(gen), -1, -1):
+            try:
+                head = self.detokenize(gen[:i])
+            except Exception:
+                continue
+            if not head.endswith(self.arm):
+                continue
+            path = gen[i:]
+            # A finished action releases the mask; prose after it is free until
+            # the model arms again.
+            return None if self.surface.trie.is_complete(path) else path
+        return None
 
     # ── The mask ─────────────────────────────────────────────────────────────
 
     def __call__(self, input_ids, scores):
         gen = self._generated(input_ids)
-        was_active = bool(self._path)
+        was_active = self._path is not None
         self._path = self._locate(gen)
 
-        if not self._path:
+        if self._path is None:
             # Free prose — including gemma4's thought channel, which must pass
             # through untouched or the model cannot think before acting.
             if was_active:

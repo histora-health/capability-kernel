@@ -16,6 +16,7 @@ import pytest
 from capability_kernel import demo_store
 from capability_kernel.compiler import (
     OPEN,
+    body_text,
     action_text,
     compile_surface,
     parity_report,
@@ -167,7 +168,7 @@ def test_only_the_manifest_methods_are_reachable_at_the_first_choice(store, tk):
     """
     surf = compile_surface(store, tk.tokenize)
 
-    walk = tk.tokenize(OPEN)
+    walk = []
     for _ in range(4):
         nxt = surf.trie.next_tokens(walk)
         assert isinstance(nxt, set) and nxt, "the walk must stay inside the trie"
@@ -187,7 +188,7 @@ def test_a_signed_study_has_no_path_through_the_trie(store, tk):
 
 def test_delete_cannot_be_spelled(store, tk):
     surf = compile_surface(store, tk.tokenize)
-    tokens = tk.tokenize(f"{OPEN} delete")
+    tokens = tk.tokenize(" delete")
     assert surf.trie.next_tokens(tokens) is None
 
 
@@ -202,7 +203,7 @@ def test_the_world_moving_moves_the_trie(store, tk):
 
 def test_a_free_text_argument_becomes_a_slot(store, tk):
     surf = compile_surface(store, tk.tokenize)
-    state = surf.trie.next_tokens(tk.tokenize(f"{OPEN} rename target=f_pano name="))
+    state = surf.trie.next_tokens(tk.tokenize(" rename target=f_pano name="))
     assert isinstance(state, SlotState)
     assert state.spec.name == "rename.name"
     assert state.exit_tokens, "a slot needs a way out or generation cannot end"
@@ -210,7 +211,7 @@ def test_a_free_text_argument_becomes_a_slot(store, tk):
 
 def test_a_slot_refuses_content_that_would_break_the_frame(store, tk):
     surf = compile_surface(store, tk.tokenize)
-    state = surf.trie.next_tokens(tk.tokenize(f"{OPEN} rename target=f_pano name="))
+    state = surf.trie.next_tokens(tk.tokenize(" rename target=f_pano name="))
     assert state.allows("panoramic")
     assert not state.allows("\n"), "a newline would close the action early"
     assert not state.allows("a=b"), "an equals sign would look like another argument"
@@ -218,15 +219,15 @@ def test_a_slot_refuses_content_that_would_break_the_frame(store, tk):
 
 def test_a_slot_is_bounded(store, tk):
     surf = compile_surface(store, tk.tokenize, slot_max_tokens=3)
-    state = surf.trie.next_tokens(tk.tokenize(f"{OPEN} rename target=f_pano name="))
+    state = surf.trie.next_tokens(tk.tokenize(" rename target=f_pano name="))
     assert state.spec.allows("x", consumed=2)
     assert not state.spec.allows("x", consumed=3), "at the cap only the exit remains"
 
 
 def test_an_incomplete_action_is_not_complete(store, tk):
     surf = compile_surface(store, tk.tokenize)
-    assert not surf.trie.is_complete(tk.tokenize(f"{OPEN} move target=f_pano"))
-    assert surf.trie.is_complete(tk.tokenize(action_text("move", {"target": "f_pano", "into": "std_endo"})))
+    assert not surf.trie.is_complete(tk.tokenize(" move target=f_pano"))
+    assert surf.trie.is_complete(tk.tokenize(body_text("move", {"target": "f_pano", "into": "std_endo"})))
 
 
 def test_the_compiler_refuses_a_surface_it_cannot_enumerate(store, tk):

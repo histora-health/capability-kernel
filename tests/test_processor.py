@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from capability_kernel import demo_store
-from capability_kernel.compiler import OPEN, action_text, compile_surface
+from capability_kernel.compiler import ARM, OPEN, action_text, body_text, compile_surface
 from capability_kernel.processor import CapabilityProcessor, Telemetry
 
 from test_compiler import WordTokenizer
@@ -37,7 +37,7 @@ def surf(store, tk):
 def proc(surf, tk):
     # Pre-tokenize the whole surface so every id the tests use exists in the
     # fake vocabulary before scores are sized against it.
-    return CapabilityProcessor(surf, tk.tokenize(OPEN), tk.detokenize)
+    return CapabilityProcessor(surf, ARM, tk.detokenize)
 
 
 def vocab(tk) -> int:
@@ -56,14 +56,24 @@ def ids(prompt: int, *generated: int):
     return np.array([0] * prompt + list(generated), dtype=np.intc)
 
 
+def armed(tk, tail: str = "") -> list[int]:
+    """Generated tokens: the arming word, then whatever body follows it.
+
+    The arming word is matched on decoded text, so it does not matter what
+    precedes it here — which is the whole point of the change that introduced
+    this helper.
+    """
+    return tk.tokenize(ARM + tail)
+
+
 def at_method(tk) -> list[int]:
-    """The path up to the point where the methods branch.
+    """Armed and sitting where the methods branch.
 
     Where that falls is a property of the tokenizer, not of the surface. This
     fake keeps the space as its own token, so the branch is one step later than
     on gemma4, where BPE merges it into the method name.
     """
-    return tk.tokenize(OPEN + " ")
+    return armed(tk, " ")
 
 
 # ── Prose stays free ─────────────────────────────────────────────────────────
@@ -90,18 +100,17 @@ def test_the_thought_channel_passes_through(proc, tk):
 
 def test_the_frame_hands_control_to_the_mask(proc, tk):
     proc(ids(3), flat(tk))
-    out = proc(ids(3, *tk.tokenize(OPEN)), flat(tk))
+    out = proc(ids(3, *armed(tk)), flat(tk))
     assert proc.active
     assert np.isneginf(out).any(), "outside the surface is unreachable, not unlikely"
 
 
 def test_only_manifest_methods_survive_the_mask(proc, tk, surf):
     proc(ids(3), flat(tk))
-    open_toks = tk.tokenize(OPEN)
-    out = proc(ids(3, *open_toks), flat(tk))
+    out = proc(ids(3, *armed(tk)), flat(tk))
 
     survivors = set(np.flatnonzero(~np.isneginf(out)).tolist())
-    nxt = surf.trie.next_tokens(open_toks)
+    nxt = surf.trie.next_tokens([])
     assert survivors == set(nxt)
     assert len(survivors) < vocab(tk), "the mask must actually remove something"
 
@@ -124,7 +133,7 @@ def test_delete_is_unreachable_even_when_the_model_insists(proc, tk):
 def test_a_signed_study_cannot_be_named(proc, tk, store):
     """`std_hyg` exists in the world and in the vocabulary — and has no path."""
     proc(ids(3), flat(tk))
-    path = tk.tokenize(f"{OPEN} rename target=")
+    path = armed(tk, " rename target=")
     hyg = tk.tokenize("std_hyg")[0]
 
     out = proc(ids(3, *path), flat(tk, favour=hyg, weight=99.0))
@@ -149,7 +158,7 @@ def test_pressure_is_recorded_before_it_is_discarded(proc, tk):
 
 def test_no_pressure_when_the_model_was_already_complying(proc, tk, surf):
     path = at_method(tk)
-    legal = next(iter(surf.trie.next_tokens(path)))
+    legal = next(iter(surf.trie.next_tokens(tk.tokenize(" "))))
     proc(ids(3), flat(tk))
     proc(ids(3, *path), flat(tk, favour=legal, weight=99.0))
 
@@ -161,7 +170,7 @@ def test_no_pressure_when_the_model_was_already_complying(proc, tk, surf):
 
 def test_the_summary_reports_how_narrow_it_got(proc, tk):
     proc(ids(3), flat(tk))
-    proc(ids(3, *tk.tokenize(f"{OPEN} move target=f_pano into=")), flat(tk))
+    proc(ids(3, *armed(tk, " move target=f_pano into=")), flat(tk))
     s = proc.telemetry.summary()
     assert s["narrowest"] >= 1
     assert s["enforced_steps"] == 1
@@ -171,7 +180,7 @@ def test_the_summary_reports_how_narrow_it_got(proc, tk):
 
 
 def test_a_complete_action_releases_the_mask(proc, tk):
-    done = tk.tokenize(action_text("move", {"target": "f_pano", "into": "std_endo"}))
+    done = armed(tk, body_text("move", {"target": "f_pano", "into": "std_endo"}))
     proc(ids(3), flat(tk))
     scores = flat(tk, favour=5)
     out = proc(ids(3, *done), scores.copy())
@@ -182,10 +191,10 @@ def test_a_complete_action_releases_the_mask(proc, tk):
 
 
 def test_a_second_action_re_engages_the_mask(proc, tk):
-    done = tk.tokenize(action_text("move", {"target": "f_pano", "into": "std_endo"}))
+    done = armed(tk, body_text("move", {"target": "f_pano", "into": "std_endo"}))
     proc(ids(3), flat(tk))
     proc(ids(3, *done), flat(tk))
-    out = proc(ids(3, *done, *tk.tokenize(OPEN)), flat(tk))
+    out = proc(ids(3, *done, *armed(tk)), flat(tk))
     assert proc.active
     assert np.isneginf(out).any()
 
@@ -195,7 +204,7 @@ def test_a_second_action_re_engages_the_mask(proc, tk):
 
 def test_a_phase_removes_methods_rather_than_rejecting_them(surf, tk):
     """Not "moving is validated and refused" — moving is unspellable."""
-    proc = CapabilityProcessor(surf, tk.tokenize(OPEN), tk.detokenize,
+    proc = CapabilityProcessor(surf, ARM, tk.detokenize,
                                enabled=surf.indices_for("set_metadata"))
     proc(ids(3), flat(tk))
     out = proc(ids(3, *at_method(tk)), flat(tk))
@@ -210,7 +219,7 @@ def test_a_phase_removes_methods_rather_than_rejecting_them(surf, tk):
 
 def test_a_slot_admits_text_but_not_the_frame(proc, tk):
     proc(ids(3), flat(tk))
-    path = tk.tokenize(f"{OPEN} rename target=f_pano name=")
+    path = armed(tk, " rename target=f_pano name=")
     newline = tk.tokenize("\n")[0]
     word = tk.tokenize("panoramic")[0]
 
@@ -226,7 +235,7 @@ def test_a_slot_always_leaves_a_way_out(proc, tk):
     """A slot with nothing legal left must still close, or generation stalls
     at negative infinity across the whole vocabulary."""
     proc(ids(3), flat(tk))
-    path = tk.tokenize(f"{OPEN} rename target=f_pano name=")
+    path = armed(tk, " rename target=f_pano name=")
     out = proc(ids(3, *path), flat(tk))
     assert not np.isneginf(out).all()
 
@@ -243,4 +252,4 @@ def test_leaving_the_trie_raises_rather_than_silently_freeing(proc, tk, surf):
     proc(ids(3), flat(tk))
     stray = tk.tokenize("qqq")[0]
     with pytest.raises(RuntimeError, match="left the trie"):
-        proc(ids(3, *tk.tokenize(OPEN), stray), flat(tk))
+        proc(ids(3, *armed(tk), stray), flat(tk))
