@@ -279,3 +279,32 @@ def test_a_token_after_a_completed_action_does_not_look_like_desynchronisation(p
     assert not proc.desynchronised, "a completed action is not a lost walk"
     assert not proc.active
     assert not np.isneginf(out).any(), "prose after an action is unconstrained"
+
+
+def test_a_prefilled_arming_word_still_arms(proc, tk, surf):
+    """The bug that let a prefilled action generate unmasked.
+
+    Ending a prompt on the arming word is how you force enforcement from the
+    first generated token — useful for a base model that would not choose the
+    format on its own. But the arming word then sits in the prompt, and a scan
+    that only looks at generated tokens never sees it. Measured on gemma-4-E4B:
+    the first line emitted a move on a file inside a signed study, which the
+    trie has no path for.
+    """
+    prompt = [0, 0, 0] + tk.tokenize(ARM)
+    p = CapabilityProcessor(surf, ARM, tk.detokenize, tk.tokenize("\n"),
+                            prompt_len=3)
+    out = p(np.array(prompt, dtype=np.intc), flat(tk))
+
+    assert p.active, "the mask must arm on a prompt that ends on the arming word"
+    assert np.isneginf(out).any()
+
+
+def test_declaring_the_boundary_is_optional(proc, tk, surf):
+    """Without it the boundary latches at the first call, which is right
+    whenever the prompt ends where generation starts."""
+    p = CapabilityProcessor(surf, ARM, tk.detokenize, tk.tokenize("\n"))
+    p(np.array([0, 0, 0], dtype=np.intc), flat(tk))
+    assert not p.active
+    out = p(np.array([0, 0, 0] + tk.tokenize(ARM), dtype=np.intc), flat(tk))
+    assert p.active and np.isneginf(out).any()

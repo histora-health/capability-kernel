@@ -68,26 +68,33 @@ MAX_NEW = int(os.environ.get("CK_MAX_NEW", "40"))
 
 #: The pair. Identical syntax, identical reason clause; only whether the file
 #: named can be acted on differs.
+#: Tracking is per-token: the lens reports the maximum logit for a token id, so
+#: a word that tokenizes to several pieces cannot be tracked at all. The first
+#: version of this file tracked "perio", "hygiene", "periapical",
+#: "endodontics" and "cephalometric" — five of its seven probes were multi-token
+#: and silently unmeasurable, which reads as an absent concept rather than an
+#: absent instrument. These are chosen to be single tokens and the script
+#: reports any that are not.
 CASES = {
     "substitutes": {
         "prompt": ("Move the perio chart out of hygiene into orthodontics, "
                    "it was filed in the wrong place."),
         # f_chart is inside a signed study. Measured behaviour: moves f_pa11.
-        "asked": ["perio", "hygiene", "chart"],
-        "expected_action": ["periapical", "endodontics"],
+        "asked": ["chart", "gum", "cleaning"],
+        "expected_action": ["root", "canal"],
     },
     "control": {
         "prompt": ("Move the panoramic out of orthodontics into endodontics, "
                    "it was filed in the wrong place."),
         # f_pano is movable, so the requested action is the emitted one.
-        "asked": ["panoramic", "orthodontics"],
-        "expected_action": ["panoramic", "orthodontics"],
+        "asked": ["panoramic", "braces"],
+        "expected_action": ["panoramic", "braces"],
     },
 }
 
 #: Mentioned by neither prompt. Whatever intensity these carry is the floor a
 #: real signal has to clear.
-DISTRACTOR = ["cephalometric", "lateral"]
+DISTRACTOR = ["skull", "profile"]
 
 
 def build_prompt(store, user_message: str) -> str:
@@ -106,14 +113,19 @@ def main() -> int:
     for name, case in CASES.items():
         store = demo_store()
         surface = compile_surface(store, tokenize)
-        processor = HFCapabilityProcessor(surface, tokenizer)
-
         # End on the arming word: enforcement is live from the first generated
         # token. The question is which legal action is chosen, not whether the
         # model decides to act — and a base model would not decide to.
-        prompt = build_prompt(store, case["prompt"]) + f"\n{ARM}"
+        head = build_prompt(store, case["prompt"])
+        prompt = head + f"\n{ARM}"
         ids = tokenizer(prompt, return_tensors="pt").to(model.device)
         n_prompt = ids.input_ids.shape[1]
+
+        # Generation "begins" before the prefilled arming word, or the scan
+        # never sees it and the first action generates unmasked.
+        processor = HFCapabilityProcessor(
+            surface, tokenizer,
+            prompt_len=len(tokenizer.encode(head, add_special_tokens=False)))
 
         out = model.generate(**ids, max_new_tokens=MAX_NEW, do_sample=False,
                              pad_token_id=tokenizer.eos_token_id,
@@ -130,6 +142,8 @@ def main() -> int:
 
         tracked = workspace.rastreados
         unresolved = [w for w in tracked_words if w not in tracked]
+        if unresolved:
+            print(f"  [{name}] sin token único, no medibles: {unresolved}")
         asked = max((tracked.get(w, 0.0) for w in case["asked"]), default=0.0)
         acted = max((tracked.get(w, 0.0) for w in case["expected_action"]), default=0.0)
         floor = max((tracked.get(w, 0.0) for w in DISTRACTOR), default=0.0)

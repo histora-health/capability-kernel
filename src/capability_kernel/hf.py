@@ -39,14 +39,15 @@ class HFCapabilityProcessor:
     """
 
     def __init__(self, surface: CompiledSurface, tokenizer, *,
-                 arm: str = ARM, enabled: set[int] | None = None,
+                 arm: str = ARM, prompt_len: int | None = None,
+                 enabled: set[int] | None = None,
                  telemetry: Telemetry | None = None) -> None:
         self.tokenizer = tokenizer
         self.inner = CapabilityProcessor(
             surface, arm,
             detokenize=lambda ids: tokenizer.decode(list(ids)),
             close_tokens=tokenizer.encode("\n", add_special_tokens=False),
-            enabled=enabled, telemetry=telemetry,
+            prompt_len=prompt_len, enabled=enabled, telemetry=telemetry,
         )
 
     @property

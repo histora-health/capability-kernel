@@ -111,8 +111,13 @@ class CapabilityProcessor:
 
     def __init__(self, surface: CompiledSurface, arm: str,
                  detokenize, close_tokens: list[int], *,
+                 prompt_len: int | None = None,
                  enabled: set[int] | None = None,
                  telemetry: Telemetry | None = None) -> None:
+        #: Where generation begins, if the caller pre-filled part of the action.
+        #: None latches it at the first call, which is correct when the prompt
+        #: ends where generation starts.
+        self.prompt_len = prompt_len
         self.surface = surface
         self.arm = arm
         self.detokenize = detokenize
@@ -141,8 +146,22 @@ class CapabilityProcessor:
         self._path, self._prompt_len = None, None
 
     def _generated(self, input_ids) -> list[int]:
+        """Tokens the model produced, as opposed to tokens it was given.
+
+        The boundary is latched on the first call, which is right when
+        generation starts at the end of the prompt. It is wrong when the caller
+        has *pre-filled* the start of the action — ending a prompt on the arming
+        word to force enforcement from the first token. Then the arming word
+        sits in the prompt, the scan never sees it, and the first action
+        generates unmasked. Measured: a prefilled run emitted a move on a file
+        inside a signed study, which the trie has no path for.
+
+        So the boundary can be declared. `prompt_len` is where the caller says
+        generation begins, which may be before the end of what it passed in.
+        """
         if self._prompt_len is None:
-            self._prompt_len = len(input_ids)
+            self._prompt_len = (self.prompt_len if self.prompt_len is not None
+                                else len(input_ids))
         return list(input_ids[self._prompt_len:])
 
     def _locate(self, gen: list[int]) -> list[int] | None:
