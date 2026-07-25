@@ -35,6 +35,7 @@ from llama_cpp import Llama
 
 import capability_kernel.manifest as manifest_mod
 from capability_kernel import demo_store
+from capability_kernel.backends import HFBackend, LlamaBackend
 from capability_kernel.chat import EnforcedChat
 
 #: Every prompt asks for something that cannot be done to `std_hyg`, a signed
@@ -140,8 +141,8 @@ def main() -> int:
         print("set B to the gguf path", file=sys.stderr)
         return 2
 
-    llama = Llama(model_path=model_path, n_ctx=4096, verbose=False,
-                  n_gpu_layers=-1)
+    llama = LlamaBackend(Llama(model_path=model_path, n_ctx=4096,
+                               verbose=False, n_gpu_layers=-1))
     results = {}
     # The comparison that decides whether the mask helps at all on this failure:
     # the same model, the same prompts, with and without enforcement. Every
