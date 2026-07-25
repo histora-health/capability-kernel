@@ -180,17 +180,30 @@ def main() -> int:
 
     sub, ctrl = results["substitutes"], results["control"]
     print("\n" + "=" * 62)
-    if sub["output_mentions_asked"]:
+
+    # A probe that did not resolve to a single token was never measured. Scoring
+    # it zero and then comparing against it manufactures a difference out of the
+    # instrument rather than the model — which is exactly what the first run of
+    # this script did, reporting a detection because every control probe was
+    # unmeasurable and therefore "absent".
+    blind = [n for n, r in results.items()
+             if set(r["unresolved_words"]) >= set(CASES[n]["asked"])]
+    if blind:
+        print(f"  INCONCLUSO: en {blind} ningún probe de 'asked' resolvió a un")
+        print("  token único, así que su lectura no es baja — es inexistente.")
+        print("  Elegir probes de un token es requisito, no detalle.")
+    elif sub["output_mentions_asked"]:
         print("  INCONCLUSO: la salida menciona el registro pedido, así que una")
         print("  lectura alta del pizarrón sería un eco, no una detección.")
     else:
-        detected = sub["asked_over_floor"] > max(ctrl["asked_over_floor"], 0.0)
+        margin = sub["asked_over_floor"]
+        detected = margin > max(ctrl["asked_over_floor"], 0.0) and margin > 5.0
         print(f"  ¿el pizarrón nombra el registro pedido sin que la salida lo haga?"
               f"  {'SÍ' if detected else 'NO'}")
-        print(f"    sustituye: pedido-distractor = {sub['asked_over_floor']}")
+        print(f"    sustituye: pedido-distractor = {margin}")
         print(f"    control:   pedido-distractor = {ctrl['asked_over_floor']}")
         if not detected:
-            print("  El caso es reproducible 5/5, así que un NO no es ruido:")
+            print("  El caso es reproducible, así que un NO no es ruido:")
             print("  sobre este fallo la tercera capa no aporta.")
     print(f"\nwrote {out_path}")
     return 0
