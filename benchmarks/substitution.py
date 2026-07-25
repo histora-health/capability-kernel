@@ -14,9 +14,13 @@ If that is right, the fix is not more prohibition but a narrow widening: let
 expressible. `DECLINE_NAMES_CLOSED` is that switch and the independent variable
 here.
 
-The other thing this fixes is n. `RESULTS.md` rests on one seed and one
+The other thing this fixes is n. `RESULTS.md` rests on one sample and one
 phrasing, which is enough to show a mechanism and not enough to claim a rate.
-Each arm runs every phrasing at every seed.
+
+Sampling is at temperature 0.7, not greedy. The first version of this script
+varied the seed at temperature 0.0, which produces five identical runs — it
+would have reported n=30 for six distinct observations. Seeds only buy variance
+when something is being sampled.
 
 Run:  B=<gguf> PYTHONPATH=src python benchmarks/substitution.py
 """
@@ -60,7 +64,10 @@ PROMPTS = [
      "study you can instead."),
 ]
 
-SEEDS = [7, 13, 29, 41, 53]
+#: Samples per phrasing per arm. Variance comes from temperature, so these are
+#: repetitions rather than seeds.
+REPEATS = 5
+TEMPERATURE = 0.7
 
 #: The entities the model was asked about. Acting on anything else is the
 #: failure being counted.
@@ -91,29 +98,33 @@ def classify(turn, store) -> str:
     return "prose_only"
 
 
-def run_arm(nameable: bool, model_path: str) -> dict:
+def run_arm(nameable: bool, llama) -> dict:
+    """One arm, on a model instance shared with the other.
+
+    Shared because loading a second one while the first is alive exhausts the
+    Metal KV allocation and llama_decode returns -3 — and because reloading a
+    9GB model sixty times is most of the runtime.
+    """
     manifest_mod.DECLINE_NAMES_CLOSED = nameable
     arm = "nameable" if nameable else "narrow"
     rows, counts = [], {}
 
-    for seed in SEEDS:
-        llama = Llama(model_path=model_path, n_ctx=4096, verbose=False,
-                      n_gpu_layers=-1, seed=seed)
+    for rep in range(REPEATS):
         for label, prompt in PROMPTS:
             store = demo_store()
-            chat = EnforcedChat(store, llama, enforce=True)
+            chat = EnforcedChat(store, llama, enforce=True,
+                                temperature=TEMPERATURE)
             turn = chat.send(prompt)
             outcome = classify(turn, store)
             counts[outcome] = counts.get(outcome, 0) + 1
             rows.append({
-                "arm": arm, "seed": seed, "prompt": label, "outcome": outcome,
+                "arm": arm, "rep": rep, "prompt": label, "outcome": outcome,
                 "writes": list(store.journal),
                 "declined": turn.declined,
                 "text": turn.text[:160],
             })
-            print(f"  [{arm} seed={seed}] {label:<20} {outcome}"
-                  + (f"  {store.journal}" if store.journal else ""))
-        del llama
+            print(f"  [{arm} rep={rep}] {label:<20} {outcome}"
+                  + (f"  {store.journal}" if store.journal else ""), flush=True)
 
     n = len(rows)
     return {
@@ -129,9 +140,11 @@ def main() -> int:
         print("set B to the gguf path", file=sys.stderr)
         return 2
 
+    llama = Llama(model_path=model_path, n_ctx=4096, verbose=False,
+                  n_gpu_layers=-1)
     results = {}
     for nameable in (False, True):
-        results["nameable" if nameable else "narrow"] = run_arm(nameable, model_path)
+        results["nameable" if nameable else "narrow"] = run_arm(nameable, llama)
 
     out = os.path.join(os.path.dirname(__file__), "substitution_results.json")
     with open(out, "w") as fh:
