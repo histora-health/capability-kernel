@@ -99,6 +99,8 @@ class CapabilityProcessor:
     :param arm: the word that hands control to the mask. Matched against decoded
         text rather than a token sequence, because how it tokenizes depends on
         what precedes it and the model picks that.
+    :param close_tokens: the tokens that terminate an action line, used as the
+        clamp when the walk desynchronises.
     :param detokenize: needed for slots — whether a token is legal inside a free
         argument depends on what it *says*, which only the tokenizer knows.
     :param enabled: opcode indices the phase controller currently permits. None
@@ -108,11 +110,16 @@ class CapabilityProcessor:
     """
 
     def __init__(self, surface: CompiledSurface, arm: str,
-                 detokenize, enabled: set[int] | None = None,
+                 detokenize, close_tokens: list[int], *,
+                 enabled: set[int] | None = None,
                  telemetry: Telemetry | None = None) -> None:
         self.surface = surface
         self.arm = arm
         self.detokenize = detokenize
+        #: What to emit when there is nothing safe left to emit. Required
+        #: rather than derived: a mask with no legal token stalls the sampler
+        #: at negative infinity across the whole vocabulary.
+        self.close_tokens = list(close_tokens)
         self.enabled = enabled if enabled is not None else surface.all_indices
         self.telemetry = telemetry if telemetry is not None else Telemetry()
 
@@ -121,6 +128,8 @@ class CapabilityProcessor:
         # step that arms it.
         self._path: list[int] | None = None
         self._prompt_len: int | None = None
+        #: Set when the walk leaves the trie. Not an exception: see _allowed_now.
+        self.desynchronised: str | None = None
 
     # ── State ────────────────────────────────────────────────────────────────
 
@@ -185,18 +194,38 @@ class CapabilityProcessor:
         nxt = self.surface.trie.next_tokens(self._path)
 
         if nxt is None:
-            # Should be unreachable: every token in _path came through the mask.
-            # If it happens, the trie and the sampler have desynchronised, and
-            # continuing would silently produce unconstrained output.
-            raise RuntimeError(
-                f"the walk left the trie at {self._path!r} — tokenizer parity "
-                f"has broken; re-run parity_report before trusting this run"
+            # The walk left the trie: the sampler and the trie disagree about
+            # what was emitted.
+            #
+            # This used to raise. It must not. llama.cpp calls the processor
+            # through a ctypes callback, which *swallows* the exception —
+            # printing "Exception ignored" and then continuing to generate with
+            # no mask at all. A design meant to fail loud failed open, which is
+            # the worst outcome available and was only visible because the run
+            # produced a wrong write afterwards.
+            #
+            # So instead: record it, and clamp generation to the tokens that end
+            # the action. Nothing further can be emitted, and the caller checks
+            # the flag and discards the turn.
+            self.desynchronised = (
+                f"the walk left the trie after {len(self._path)} tokens; "
+                f"tokenizer parity has broken — re-run parity_report"
             )
+            return self._closers()
 
         if isinstance(nxt, SlotState):
             return self._slot_tokens(nxt, scores)
 
         return {t for t in nxt if self._reaches_enabled(t)}
+
+    def _closers(self) -> set[int]:
+        """The only tokens left when the walk is lost.
+
+        Whatever comes next cannot be more of an action. Falling back to the
+        closing token ends the line; the caller then sees ``desynchronised``
+        and discards the turn rather than trusting a half-masked action.
+        """
+        return set(self.close_tokens)
 
     def _reaches_enabled(self, token: int) -> bool:
         """Prune branches leading only to opcodes this phase forbids."""
