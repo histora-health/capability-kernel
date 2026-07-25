@@ -32,6 +32,15 @@ METHODS = ("decline", "rename", "move", "set_metadata")
 #: Methods with no store method behind them — completing them changes nothing.
 VIRTUAL = ("decline",)
 
+#: Whether ``decline`` may name a closed record.
+#:
+#: A switch rather than a decision because it is the independent variable of the
+#: substitution experiment, and the two settings are the two arms. False is the
+#: design that was measured substituting a reachable target for the instructed
+#: one; True is the hypothesis that it did so because it had no way to say what
+#: it had been asked about. See ``benchmarks/substitution.py``.
+DECLINE_NAMES_CLOSED = True
+
 
 @dataclass(frozen=True)
 class Method:
@@ -63,8 +72,14 @@ MANIFEST: dict[str, Method] = {
     #: action by not acting. This one has no store method behind it on purpose.
     "decline": Method(
         name="decline",
-        summary="Take no action, and say why. Always available.",
-        args={"reason": None},
+        summary=("Take no action on a target, and say why. Always available, "
+                 "and the only method that can name a closed record."),
+        #: ``target`` is enumerated over *everything*, closed records included —
+        #: the one place in this manifest where the surface is wider than what
+        #: may be done. See :meth:`ClinicalStore.nameable` for why.
+        args={"target": lambda s: _ids(s.nameable() if DECLINE_NAMES_CLOSED
+                                       else s.renameable()),
+              "reason": None},
     ),
     "rename": Method(
         name="rename",
