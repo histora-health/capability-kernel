@@ -28,6 +28,18 @@ from .trie import SlotSpec, TokenTrie
 OPEN = "\nACTION"
 CLOSE = "\n"
 
+#: What actually arms the mask, and deliberately not the same as :data:`OPEN`.
+#:
+#: A frame the model has to spell exactly is a trigger the model controls, and
+#: it can decline to spell it. Measured on gemma4:12b: asked to delete a file,
+#: it emitted ``<channel|>ACTION delete(path='std_hyg/f_chart')`` — no leading
+#: newline, so a ``"\nACTION"`` trigger never fired and the whole line was
+#: generated free. Arming on the bare word instead means every occurrence of
+#: ACTION, wherever it appears, hands control to the trie. Fail-closed: the
+#: cost is that the model cannot discuss actions in prose, which is a smaller
+#: problem than being able to opt out of enforcement.
+ARM = "ACTION"
+
 #: Characters that may not appear inside a free-text argument, because they
 #: would close it early or break the line-oriented frame.
 SLOT_FORBID = "\n\r\"'()="
@@ -62,8 +74,19 @@ def action_text(method: str, args: dict[str, str]) -> str:
     to end, and every one of them is a place the trie and the tokenizer can
     disagree.
     """
+    return OPEN + body_text(method, args)
+
+
+def body_text(method: str, args: dict[str, str]) -> str:
+    """The action from the arming word onward — what the trie actually holds.
+
+    ``ACTION`` itself is not in the trie. Whether BPE gives it one token or
+    three depends on what precedes it, and the model chooses that: measured on
+    gemma4 it appeared after a newline and after ``<channel|>``. Rooting the
+    trie one token later makes the walk independent of that choice.
+    """
     body = " ".join(f"{k}={v}" for k, v in args.items())
-    return f"{OPEN} {method} {body}{CLOSE}"
+    return f" {method} {body}{CLOSE}"
 
 
 def compile_surface(store: ClinicalStore, tokenize, *,
@@ -95,13 +118,13 @@ def compile_surface(store: ClinicalStore, tokenize, *,
 
             if slot_arg is None:
                 text = action_text(method, args)
-                indices.add(trie.insert(text, tokenize(text), method))
+                indices.add(trie.insert(text, tokenize(body_text(method, args)), method))
                 continue
 
             # Split the action at the free argument: everything up to and
             # including "key=" is fixed, the value is a slot, the rest is fixed.
             before, after = _split_at(args, slot_arg)
-            prefix = f"{OPEN} {method} " + "".join(f"{k}={v} " for k, v in before) + f"{slot_arg}="
+            prefix = f" {method} " + "".join(f"{k}={v} " for k, v in before) + f"{slot_arg}="
             suffix = ("".join(f" {k}={v}" for k, v in after)) + CLOSE
             spec_slot = SlotSpec(forbid=SLOT_FORBID, max_tokens=slot_max_tokens,
                                  name=f"{method}.{slot_arg}")
@@ -206,14 +229,14 @@ def prefix_stability(store, tokenize) -> list[dict]:
     for method, spec in MANIFEST.items():
         for args in _enumerate(store, method, spec):
             concrete = {k: (v if v is not None else "example_name") for k, v in args.items()}
-            whole = action_text(method, concrete)
+            whole = body_text(method, concrete)
 
-            # The frame, and every slot boundary the compiler will cut at.
-            check(f"{method}:open", OPEN, whole)
+            # Every boundary the compiler cuts at, now rooted at the body.
+            check(f"{method}:method", f" {method}", whole)
             slot_arg = next((k for k, v in args.items() if v is None), None)
             if slot_arg is not None:
                 before, _ = _split_at(args, slot_arg)
-                prefix = (f"{OPEN} {method} "
+                prefix = (f" {method} "
                           + "".join(f"{k}={concrete[k]} " for k, _ in before)
                           + f"{slot_arg}=")
                 check(f"{method}:slot:{slot_arg}", prefix, whole)
