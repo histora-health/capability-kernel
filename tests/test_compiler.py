@@ -177,8 +177,9 @@ def test_only_the_manifest_methods_are_reachable_at_the_first_choice(store, tk):
             break
         walk = walk + [next(iter(nxt))]
 
-    assert {tk.words[t].strip() for t in nxt} == {"decline", "rename", "move", "set_metadata"}, \
-        "declining is reachable from every action, or refusing means acting wrongly"
+    assert {tk.words[t].strip() for t in nxt} == {
+        "audit", "decline", "rename", "move", "set_metadata"}, \
+        "the whole manifest is in the trie; the phase controller narrows it later"
 
 
 def test_a_signed_study_can_be_named_but_not_acted_on(store, tk):

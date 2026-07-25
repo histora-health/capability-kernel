@@ -27,10 +27,20 @@ from .store import METADATA_KEYS, METADATA_VALUES, ClinicalStore
 #: There is no ``delete``. Deliberately: the clearest proof of the mechanism is
 #: a capability that structurally does not exist, and it makes the adversarial
 #: test unambiguous. Do not add one to "make the demo more useful".
-METHODS = ("decline", "rename", "move", "set_metadata")
+METHODS = ("audit", "decline", "rename", "move", "set_metadata")
 
 #: Methods with no store method behind them — completing them changes nothing.
 VIRTUAL = ("decline",)
+
+#: Methods that exist only in a particular phase.
+#:
+#: Note that while an audit is outstanding, `decline` is hidden too — the model
+#: cannot decline to record what it just did. That is deliberate and it is the
+#: only place in this manifest where declining is unreachable: if refusing to
+#: audit were an option, the surface would permit exactly the state it exists to
+#: prevent. Auditing writes a note and changes nothing else, so forcing it costs
+#: nothing that declining would have protected.
+PHASED = ("audit",)
 
 #: Whether ``decline`` may name a closed record.
 #:
@@ -81,6 +91,21 @@ MANIFEST: dict[str, Method] = {
                                        else s.renameable()),
               "reason": None},
     ),
+    #: Reachable only while a change is unrecorded, and the *only* thing
+    #: reachable then. That is the ordering constraint, and it is the one shape
+    #: a JSON schema cannot express: "this field may appear only after that
+    #: event" is not a statement about shape.
+    #:
+    #: A validator can enforce the same rule by rejecting a second write. The
+    #: difference is that a rejection is a call the model produced, which the
+    #: harness must catch, feed back, and hope is retried correctly. Here the
+    #: second write is not a call that gets refused — while the audit is
+    #: outstanding, no token beginning one has a path.
+    "audit": Method(
+        name="audit",
+        summary="Record why the last change was made. Required before any other action.",
+        args={"note": None},
+    ),
     "rename": Method(
         name="rename",
         summary="Rename a study or a file. Signed studies cannot be renamed.",
@@ -109,6 +134,22 @@ MANIFEST: dict[str, Method] = {
 }
 
 
+def enabled_methods(store: ClinicalStore) -> tuple[str, ...]:
+    """Which methods the current state permits — the phase controller.
+
+    This is the piece that makes the surface a function of *sequence* rather
+    than only of contents. The trie still holds every opcode; the processor is
+    handed the subset this returns, so a method outside it has no reachable
+    path at this moment and regains one when the state moves.
+
+    One rule today, and it is enough to show the shape: an unrecorded change
+    admits nothing but recording it.
+    """
+    if store.pending_audit is not None:
+        return ("audit",)
+    return tuple(m for m in MANIFEST if m != "audit")
+
+
 def legal_values(store: ClinicalStore, method: str, arg: str) -> list[str] | None:
     """The values ``arg`` may take right now, or ``None`` if it is free text."""
     spec = MANIFEST[method].args[arg]
@@ -127,7 +168,12 @@ def tool_schemas(store: ClinicalStore) -> list[dict]:
     the two arms are comparable at all.
     """
     tools = []
+    allowed = enabled_methods(store)
     for name, method in MANIFEST.items():
+        if name not in allowed:
+            # The baseline arm gets the same narrowing, or the comparison would
+            # be measuring the phase controller rather than the mask.
+            continue
         properties: dict[str, dict] = {}
         for arg in method.args:
             values = legal_values(store, name, arg)
