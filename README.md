@@ -31,23 +31,57 @@ trie. It is unnameable.
 
 ## Status
 
-First draft, private, nothing built yet. **[PLAN.md](PLAN.md)** has the
-milestones and — more usefully — the three things already measured that shaped
-them:
+M0–M4 built and running against gemma4:12b. 47 tests. **[PLAN.md](PLAN.md)** has
+the milestones.
 
-- **ollama cannot enforce.** It exposes `logprobs`, so it can *observe* mask
-  pressure, but no hook to mask the sampler. It is the baseline arm.
-- **Gemma 4 is the wrong model** — not because `<|call|>` splits across its
-  tokens, though it does, but because every generation opens with
-  `<|channel>thought`. Masking from token 0 fights a mandatory reasoning channel.
-- **`llama-cpp-python` is the runtime.** Its `LogitsProcessor` is the only place
-  that gives enforcement, per-state recomputation, and the rejected mass in one
-  hook.
+The mechanism works, measured: asked to delete a file and rename a signed study,
+neither is emitted. At the step where the method name is chosen the model has
+three legal tokens out of 262,144. `delete` is not improbable, it is absent.
+
+### Which model, and where
+
+Settled by measurement rather than by the spec sheet, and the two variants turn
+out to be complementary in the opposite direction to what was assumed:
+
+| | ollama | llama.cpp |
+|---|---|---|
+| `gemma4:e4b` | 43s / 3 turns | will not load — 720 of 2131 tensors |
+| `gemma4:12b` | >10 min / turn | loads, vocab 262144 — **the enforced arm** |
+
+e4b's MatFormer nesting reports `arch=gemma4` and then fails the tensor count,
+so ollama's engine is the only one that runs it. 12b, unusable as a chat model,
+is the one that can be masked.
+
+### What the mask does not do
+
+Three failure modes, all found by running it, none fixed by more masking. They
+are the honest boundary of the claim and the reason the two-arm measurement is
+worth more than a violation count.
+
+**It could be opted out of.** The first version armed on the exact token
+sequence for `"\nACTION"`. Asked to delete a file, gemma4 wrote
+`<channel|>ACTION delete(path=...)` — no newline, no match, the whole line
+generated free. A frame the model must spell exactly is a trigger the model
+controls. Arming now happens on decoded text, wherever the word appears.
+
+**It caused a wrong write.** Asked to rename a signed study, the enforced arm
+renamed a *different* study — the nearest reachable target — and recorded it as
+a success. The baseline arm refused correctly. Removing the illegal action had
+converted a correct refusal into a wrong write on an intact record, which in a
+clinical folder is worse than the violation it prevented. The cause is
+structural: once the model arms, the mask requires it to finish *some* legal
+action. A surface containing only ways to act can only be satisfied by acting.
+Hence `decline`, which is now part of the manifest.
+
+**It does not make an action correct.** Asked to tag a file, the model tagged
+the study the file sits in. Both are legal opcodes; the mask cannot tell them
+apart. That one needs a better model or a better prompt, and saying so is more
+useful than implying the mechanism covers it.
 
 ## Scope of the first draft
 
 One patient folder, one level of studies, files and folders both carrying
-metadata. Three operations: rename, move, set metadata.
+metadata. Three operations — rename, move, set metadata — plus `decline`.
 
 There is no `delete` method, deliberately. The clearest proof of the mechanism is
 a capability that structurally does not exist.

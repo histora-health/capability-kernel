@@ -25,8 +25,9 @@ import time
 from dataclasses import dataclass, field
 
 from .compiler import ARM, CLOSE, CompiledSurface, compile_surface
-from .manifest import MANIFEST, VIRTUAL
+from .manifest import MANIFEST, VIRTUAL, legal_values
 from .processor import CapabilityProcessor, Telemetry
+from .harness import Violation
 from .store import ClinicalStore, StoreError
 
 SYSTEM = """\
@@ -74,17 +75,26 @@ class EnforcedTurn:
 class EnforcedChat:
     """Chat over a store where every action is generated under the mask.
 
+    :param enforce: whether the mask is applied. False runs the identical code
+        path — same model, same runtime, same prompt, same store, same parsing —
+        with the logits processor omitted, which is the only way to attribute a
+        difference to the mask rather than to any of those. The baseline arm
+        then validates each action after the fact, the way every tool-calling
+        harness does, and the refusals it collects are what the enforced arm
+        claims to make unreachable.
     :param max_actions: hard bound per user message.
     :param max_no_ops: consecutive actions that change nothing before the loop
         gives up. Two, because one repeat is a coincidence and the observed
         failure repeated five times.
     """
 
-    def __init__(self, store: ClinicalStore, llama, *,
+    def __init__(self, store: ClinicalStore, llama, *, enforce: bool = True,
                  max_actions: int = 6, max_no_ops: int = 2,
                  max_tokens: int = 256, temperature: float = 0.0) -> None:
         self.store = store
         self.llama = llama
+        self.enforce = enforce
+        self.violations: list[Violation] = []
         self.max_actions = max_actions
         self.max_no_ops = max_no_ops
         self.max_tokens = max_tokens
@@ -140,7 +150,8 @@ class EnforcedChat:
             out = self.llama(prompt, max_tokens=self.max_tokens,
                              temperature=self.temperature,
                              stop=[CLOSE + CLOSE, "User:"],
-                             logits_processor=LogitsProcessorList([proc]))
+                             logits_processor=(LogitsProcessorList([proc])
+                                               if self.enforce else None))
             text = out["choices"][0]["text"]
 
             action = _parse(text)
@@ -173,6 +184,15 @@ class EnforcedChat:
         return turn
 
     def _execute(self, method: str, args: dict, turn: EnforcedTurn) -> Executed | None:
+        if not self.enforce:
+            # The baseline arm has to check what the enforced arm made
+            # impossible. Anything caught here is a call that was generated.
+            v = _validate(self.store, method, args)
+            if v is not None:
+                self.violations.append(v)
+                turn.refused.append(f"{v.kind}: {method}({args}) — {v.detail}")
+                return None
+
         if method in VIRTUAL:
             turn.text = args.get("reason", "").strip() or "No action taken."
             return None
@@ -190,6 +210,23 @@ class EnforcedChat:
                         changed=self.store.snapshot() != before)
 
 
+def _validate(store: ClinicalStore, method: str, args: dict) -> Violation | None:
+    """What the baseline arm must do after generation, and the enforced arm
+    does not need to do at all."""
+    if method not in MANIFEST:
+        return Violation("unknown_method", method, args, "not in the manifest")
+    for arg, value in args.items():
+        if arg not in MANIFEST[method].args:
+            return Violation("unknown_argument", method, args, f"{arg!r} is not an argument")
+        allowed = legal_values(store, method, arg)
+        if allowed is not None and value not in allowed:
+            return Violation("not_in_enum", method, args, f"{arg}={value!r} not in {allowed}")
+    missing = set(MANIFEST[method].args) - set(args)
+    if missing:
+        return Violation("missing_argument", method, args, f"missing {sorted(missing)}")
+    return None
+
+
 def _parse(text: str) -> tuple[str, dict] | None:
     """Read back an action the mask produced.
 
@@ -202,7 +239,7 @@ def _parse(text: str) -> tuple[str, dict] | None:
             continue
         line = line.split(ARM, 1)[1].strip()
         parts = line.split()
-        if not parts or parts[0] not in MANIFEST:
+        if not parts:
             continue
         method, args = parts[0], {}
         key = None
@@ -212,7 +249,7 @@ def _parse(text: str) -> tuple[str, dict] | None:
                 args[key] = value
             elif key:
                 args[key] += " " + part      # a slot value with spaces in it
-        if set(args) == set(MANIFEST[method].args):
+        if method not in MANIFEST or set(args) == set(MANIFEST[method].args):
             return method, args
     return None
 
