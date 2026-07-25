@@ -140,56 +140,20 @@ the study the file sits in. Both are legal opcodes; the mask cannot tell them
 apart. That one needs a better model or a better prompt, and saying so is more
 useful than implying the mechanism covers it.
 
-### And a Jacobian lens does not close the gap either
+### A semantic layer was tried, and does not close it either
 
-The obvious next move is a semantic layer: read the model's internal workspace
-for the intent the surface cannot see. That was tested rather than assumed
-(**[benchmarks/RESULTS_JLENS.md](benchmarks/RESULTS_JLENS.md)**), with the mask
-and the [lens](https://huggingface.co/neuronpedia/jacobian-lens) attached to the
-same gemma-4-E4B instance in one process.
+Four instruments over the model's internal workspace — per-token probes, a
+per-position trace, a concept signature, a trained probe — none of which sees
+this failure, on a rig whose positive control passes. The code is not in this
+repository; **[docs/WHAT_DID_NOT_WORK.md](docs/WHAT_DID_NOT_WORK.md)** has what
+was tried, what the numbers were, and the two traps worth knowing before
+repeating it.
 
-The first attempt read the wrong layers — `Runtime` defaults to a window fitted
-for Qwen, and through it the contrast this lens *is* known to separate scores 3
-of 9 rather than 8 of 9. So the run now calibrates the window and validates the
-instrument on those known pairs before measuring anything: **8 wins, 2 ties, 2
-losses of 12 — the instrument measures.**
-
-| | aggregate (asked − floor) | per-position peak |
-|---|---|---|
-| substituting case | 0.50 | **6.68** |
-| control | 0.26 | **5.69** |
-
-The per-position trace was worth running — peaks are ten times the aggregate, so
-the mean was washing out real structure. But it does not separate the cases: the
-control peaks within 15% of the substituting one. The workspace carries
-record-related concepts at particular steps, equally in both.
-
-The substitution reproduced here, so the failure occurred and a validated
-instrument did not register it. **On this failure, structural enforcement and
-activation monitoring share a blind spot** — which is the opposite of the
-assumption that they cover disjoint failure classes.
-
-Two stronger instruments were then tried on 20 scenarios: a concept signature in
-the exact shape the positive control validates, and a logistic probe trained on
-substituting-versus-correct with a 200-run permutation baseline. The signature
-scores **0.0000 on every clinical record, in both classes**. The probe reaches
-0.600 — *exactly* the majority-class rate — at p=0.299.
-
-The reason is visible in the workspace itself:
-
-    subdirectory · namespaces · dataframe · moveTo · relocate · filesystem · shutil
-
-`shutil` is Python's file-operations module. **The model is representing the task
-as generic file manipulation; the clinical domain is not in its working state at
-all.** That explains every null at once, and it suggests why substitution is
-cheap: swapping which file is a small edit when nothing in the representation
-says one of them is a patient's chart inside a signed record.
-
-Which makes this a finding about the surface rather than about the lens. The
-manifest names entities `f_chart` and `std_hyg`; the folder listing shows
-`pano_march.dcm`. Everything the model sees while acting is file-shaped.
-**Whether the manifest's own vocabulary determines what the model can think about
-is the next experiment, and it costs nothing.**
+The short version: during action emission the workspace reads `subdirectory ·
+filesystem · shutil` and contains no clinical concept at all, under either
+opaque or semantically loaded identifiers. **Structural enforcement and
+activation monitoring share a blind spot here** rather than covering disjoint
+failure classes, which is the opposite of the assumption this work started from.
 
 ## Where this goes
 
@@ -223,9 +187,14 @@ a capability that structurally does not exist.
 
 ## Running it
 
-    pip install -e ".[enforced]"          # llama.cpp, the quantised path
-    pip install -e ".[hf]"                # transformers, needed for the lens
+    pip install -e ".[enforced]"          # llama.cpp — the quantised path
+    pip install -e ".[hf]"                # transformers — the only way to mask E4B
     PYTHONPATH=src:tests pytest tests/ -q
+
+`gemma-4-E4B` is the variant a clinic workstation can run and llama.cpp will not
+load it, reporting 720 of an expected 2131 tensors. `src/capability_kernel/hf.py`
+wraps the same processor for `transformers`, which is what makes the deployable
+model maskable at all.
 
 The benchmarks need a gguf. With ollama installed:
 
