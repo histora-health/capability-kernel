@@ -27,7 +27,10 @@ from .store import METADATA_KEYS, METADATA_VALUES, ClinicalStore
 #: There is no ``delete``. Deliberately: the clearest proof of the mechanism is
 #: a capability that structurally does not exist, and it makes the adversarial
 #: test unambiguous. Do not add one to "make the demo more useful".
-METHODS = ("rename", "move", "set_metadata")
+METHODS = ("decline", "rename", "move", "set_metadata")
+
+#: Methods with no store method behind them — completing them changes nothing.
+VIRTUAL = ("decline",)
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,24 @@ def _ids(entities) -> list[str]:
 
 
 MANIFEST: dict[str, Method] = {
+    #: Declining is a capability, and leaving it out was a real bug.
+    #:
+    #: Measured on gemma4:12b: asked to rename a signed study, the enforced arm
+    #: renamed a *different* study instead — the nearest reachable target — and
+    #: recorded it as a success. The baseline arm, free to generate anything,
+    #: refused correctly. Removing the illegal action had converted a refusal
+    #: into a wrong action on an intact record, which in a clinical folder is
+    #: worse than the violation it prevented.
+    #:
+    #: The cause is structural: once the model emits ACTION the mask requires
+    #: it to finish *some* legal action, and if every action is wrong it still
+    #: has to pick one. So there must always be a reachable way to complete an
+    #: action by not acting. This one has no store method behind it on purpose.
+    "decline": Method(
+        name="decline",
+        summary="Take no action, and say why. Always available.",
+        args={"reason": None},
+    ),
     "rename": Method(
         name="rename",
         summary="Rename a study or a file. Signed studies cannot be renamed.",

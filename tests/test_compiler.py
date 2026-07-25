@@ -100,8 +100,9 @@ def test_parity_passes_on_a_well_behaved_tokenizer(store, tk):
     assert rep["ok"]
     assert rep["failures"] == []
     assert rep["unstable_prefixes"] == []
+    from capability_kernel.manifest import MANIFEST
     assert rep["checked"] == sum(
-        len(compile_surface(store, tk.tokenize).by_method[m]) for m in ("rename", "move", "set_metadata")
+        len(compile_surface(store, tk.tokenize).by_method[m]) for m in MANIFEST
     )
 
 
@@ -176,7 +177,8 @@ def test_only_the_manifest_methods_are_reachable_at_the_first_choice(store, tk):
             break
         walk = walk + [next(iter(nxt))]
 
-    assert {tk.words[t].strip() for t in nxt} == {"rename", "move", "set_metadata"}
+    assert {tk.words[t].strip() for t in nxt} == {"decline", "rename", "move", "set_metadata"}, \
+        "declining is reachable from every action, or refusing means acting wrongly"
 
 
 def test_a_signed_study_has_no_path_through_the_trie(store, tk):
