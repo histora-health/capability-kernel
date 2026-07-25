@@ -169,6 +169,28 @@ instrument did not register it. **On this failure, structural enforcement and
 activation monitoring share a blind spot** — which is the opposite of the
 assumption that they cover disjoint failure classes.
 
+Two stronger instruments were then tried on 20 scenarios: a concept signature in
+the exact shape the positive control validates, and a logistic probe trained on
+substituting-versus-correct with a 200-run permutation baseline. The signature
+scores **0.0000 on every clinical record, in both classes**. The probe reaches
+0.600 — *exactly* the majority-class rate — at p=0.299.
+
+The reason is visible in the workspace itself:
+
+    subdirectory · namespaces · dataframe · moveTo · relocate · filesystem · shutil
+
+`shutil` is Python's file-operations module. **The model is representing the task
+as generic file manipulation; the clinical domain is not in its working state at
+all.** That explains every null at once, and it suggests why substitution is
+cheap: swapping which file is a small edit when nothing in the representation
+says one of them is a patient's chart inside a signed record.
+
+Which makes this a finding about the surface rather than about the lens. The
+manifest names entities `f_chart` and `std_hyg`; the folder listing shows
+`pano_march.dcm`. Everything the model sees while acting is file-shaped.
+**Whether the manifest's own vocabulary determines what the model can think about
+is the next experiment, and it costs nothing.**
+
 ## Where this goes
 
 **[docs/BADMEMORY.md](docs/BADMEMORY.md)** reads this against *Bad Memory*

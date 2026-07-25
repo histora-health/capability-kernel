@@ -94,3 +94,102 @@ More to the point, escalating size while the instrument was miscalibrated would
 have reproduced the same null and been read as a capability limit. Now that the
 control passes, size is a legitimate question — and the answer would be
 `gemma-4-31b`, same family, same lens repository, needing an A100.
+
+---
+
+# The stronger instruments, and what they found
+
+Both objections above were addressed. Neither changed the answer, and together
+they explain why.
+
+`benchmarks/jlens_probe.py`, gemma-4-E4B, calibrated window, 20 scenarios across
+four ordinary clerical phrasings. Labels come from the emitted action:
+**6 substituted, 9 correct, 5 declined, 0 unparsed.**
+
+## The record signature: zero, everywhere
+
+The instrument that the positive control validates — a fraction of workspace
+intensity captured by concept anchors, matched on decoded strings with a prefix
+family, so multi-token anchors work.
+
+| signature | substituted | correct | delta |
+|---|---|---|---|
+| higiene | 0.0000 | 0.0000 | 0.0000 |
+| endodoncia | 0.0000 | 0.0000 | 0.0000 |
+| ortodoncia | 0.0000 | 0.0000 | 0.0000 |
+| cefalometria | 0.0000 | 0.0000 | 0.0000 |
+
+Not "no difference". **Zero.** Not one clinical concept appears in the workspace
+of any of the twenty generations.
+
+## The trained probe: chance
+
+Logistic regression over the full workspace, leave-one-out, against 200
+permutations.
+
+| | |
+|---|---|
+| LOO accuracy | 0.600 |
+| majority class | **0.600** |
+| permutation mean | 0.541 |
+| p | 0.299 |
+
+It achieves exactly the majority-class rate, which is what a classifier does
+when it learns to always answer "correct". Nothing in the workspace separates
+the two.
+
+## Why: the model is not thinking about a clinic
+
+The workspace top during a substituting generation:
+
+    subdirectory · namespaces · dataframe · Namespace · moveTo · relocate
+    filesystem · shutil · transposition · rename · transferencia
+
+`shutil` is Python's file-operations module. The model is representing this task
+as **generic file manipulation**, and the clinical domain is not present in its
+working state at all.
+
+That is a coherent explanation rather than an absence of one, and it accounts for
+every null in this file: the per-token probes found nothing because there was
+nothing clinical to find; the signature scores zero because it has nothing to
+match; the trained probe finds chance because both classes look identical — they
+*are* identical, at the level the model is working at.
+
+**It also suggests why the substitution happens.** If the internal state is "move
+a file into a folder", then swapping which file is a cheap edit. Nothing in that
+representation says one of these is a patient's periodontal chart inside a signed
+record. The model is not choosing the wrong clinical entity; it is not
+representing clinical entities.
+
+## The consequence, which is a design finding rather than a lens finding
+
+The capability surface names entities `f_chart`, `std_hyg`, `f_pa11` — opaque
+identifiers. `store.describe()` shows filenames like `pano_march.dcm`. The whole
+vocabulary the model sees while acting is file-shaped, so file-shaped is what it
+represents.
+
+**The manifest's naming is not cosmetic. It determines what the model can think
+about while it acts.** That is testable: rebuild the surface with semantically
+loaded identifiers — `periodontal_chart` inside `hygiene_signed` rather than
+`f_chart` inside `std_hyg` — and re-run both instruments. If the clinical
+concepts appear in the workspace, the lens question reopens on completely
+different footing. If they still do not, the null is about the model.
+
+That experiment costs nothing and has not been run. It is the next one, and it
+matters more than model size.
+
+## On bigger models and other families
+
+Not the bottleneck, on this evidence.
+
+- **There is no lens for `gemma-4-12b`**, the variant the mask runs on. The
+  family has e2b, e4b and 31b.
+- **Qwen separates worse, not better.** sleep-harness measured the same security
+  contrast at delta 0.090 on Qwen3.5-4B against **0.141** on gemma-4-E4B. Gemma
+  is the stronger substrate for this lens, so switching families would trade
+  down.
+- **Scale would not address the finding.** A larger model asked to emit
+  `move target=f_pa11 into=std_ortho` over a folder of `.dcm` filenames has the
+  same reason to represent the task as file manipulation. Spending an A100 on
+  `gemma-4-31b` before testing whether the surface's own vocabulary is the cause
+  would be answering the second question first.
