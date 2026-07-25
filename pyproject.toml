@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capability-kernel"
+version = "0.1.0"
+description = "Capabilities applied at the sampler — an agent cannot emit an action it is not authorised to take."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.optional-dependencies]
+# The enforced arm. Only llama-cpp-python exposes a logits processor, which is
+# the single hook that gives enforcement, per-state recomputation and the
+# rejected probability mass in one place.
+enforced = ["llama-cpp-python>=0.3", "numpy>=1.24"]
+# The tokenizer parity check needs a real tokenizer, not real weights.
+parity = ["tokenizers>=0.15"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
