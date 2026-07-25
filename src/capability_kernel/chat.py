@@ -145,6 +145,7 @@ class EnforcedChat:
         while len(turn.actions) < self.max_actions:
             surface = self._recompile()
             proc = CapabilityProcessor(surface, ARM, self._detokenize,
+                                       self._tokenize(CLOSE),
                                        telemetry=self.telemetry)
 
             out = self.llama(prompt, max_tokens=self.max_tokens,
@@ -153,6 +154,16 @@ class EnforcedChat:
                              logits_processor=(LogitsProcessorList([proc])
                                                if self.enforce else None))
             text = out["choices"][0]["text"]
+
+            if proc.desynchronised:
+                # The mask stopped applying mid-action. Anything generated from
+                # that point was unconstrained, so none of it is trustworthy —
+                # including the part that came before, since the boundary is
+                # exactly what is no longer known.
+                turn.refused.append(f"desynchronised: {proc.desynchronised}")
+                turn.text = ("Stopped: enforcement could not be guaranteed for "
+                             "this turn, so nothing was applied.")
+                break
 
             action = _parse(text)
             if action is None:
@@ -228,29 +239,53 @@ def _validate(store: ClinicalStore, method: str, args: dict) -> Violation | None
 
 
 def _parse(text: str) -> tuple[str, dict] | None:
-    """Read back an action the mask produced.
+    """Read back an action.
 
-    Not validation. Every token here came through the trie, so the shape is
-    guaranteed; this only has to recover the fields.
+    In the enforced arm this is not validation: every token came through the
+    trie, so the shape is guaranteed and this only recovers the fields.
+
+    In the baseline arm it has to be generous, and that is not a courtesy. The
+    first run rejected ``move(source=f_pano, into=std_endo)`` as an unknown
+    method purely because of the parentheses, so the baseline scored zero writes
+    for reasons of syntax and the comparison measured obedience to a format
+    rather than respect for authority — which is the thing being tested. An
+    unfair baseline makes the enforced arm look good for the wrong reason.
     """
     for line in text.splitlines():
         line = line.strip()
         if ARM not in line:
             continue
         line = line.split(ARM, 1)[1].strip()
+
+        # Accept both "move target=x into=y" and "move(target=x, into=y)".
+        if "(" in line:
+            head, _, tail = line.partition("(")
+            line = head.strip() + " " + tail.rstrip().rstrip(")").replace(",", " ")
+
         parts = line.split()
         if not parts:
             continue
+
         method, args = parts[0], {}
         key = None
         for part in parts[1:]:
             if "=" in part:
                 key, value = part.split("=", 1)
+                key = key.strip()
                 args[key] = value
             elif key:
                 args[key] += " " + part      # a slot value with spaces in it
-        if method not in MANIFEST or set(args) == set(MANIFEST[method].args):
-            return method, args
+
+        # Quotes come off after joining, or a value with spaces loses its
+        # closing quote and keeps the opening one.
+        args = {k: v.strip().strip("'\"") for k, v in args.items()}
+
+        if not args:
+            continue
+        # Returned even when the arguments are wrong. The baseline arm needs
+        # validation to say *why* — "move has no argument 'source'" is a real
+        # finding; silently not parsing it is a zero that means nothing.
+        return method, args
     return None
 
 

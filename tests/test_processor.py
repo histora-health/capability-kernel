@@ -37,7 +37,7 @@ def surf(store, tk):
 def proc(surf, tk):
     # Pre-tokenize the whole surface so every id the tests use exists in the
     # fake vocabulary before scores are sized against it.
-    return CapabilityProcessor(surf, ARM, tk.detokenize)
+    return CapabilityProcessor(surf, ARM, tk.detokenize, tk.tokenize("\n"))
 
 
 def vocab(tk) -> int:
@@ -204,7 +204,7 @@ def test_a_second_action_re_engages_the_mask(proc, tk):
 
 def test_a_phase_removes_methods_rather_than_rejecting_them(surf, tk):
     """Not "moving is validated and refused" — moving is unspellable."""
-    proc = CapabilityProcessor(surf, ARM, tk.detokenize,
+    proc = CapabilityProcessor(surf, ARM, tk.detokenize, tk.tokenize("\n"),
                                enabled=surf.indices_for("set_metadata"))
     proc(ids(3), flat(tk))
     out = proc(ids(3, *at_method(tk)), flat(tk))
@@ -243,13 +243,20 @@ def test_a_slot_always_leaves_a_way_out(proc, tk):
 # ── Desynchronisation is loud ────────────────────────────────────────────────
 
 
-def test_leaving_the_trie_raises_rather_than_silently_freeing(proc, tk, surf):
-    """If parity breaks, the failure must not look like ordinary generation.
+def test_leaving_the_trie_clamps_rather_than_freeing(proc, tk, surf):
+    """If parity breaks, generation must not continue unconstrained.
 
-    Reaching this state means the mask stopped applying — the worst possible
-    silent failure, since output would look normal and be unconstrained.
+    Raising here does not work: llama.cpp calls the processor through a ctypes
+    callback that swallows the exception and keeps generating with no mask —
+    observed, and it produced a wrong write. So the mask clamps to the closing
+    token and records the fact for the caller to act on.
     """
     proc(ids(3), flat(tk))
     stray = tk.tokenize("qqq")[0]
-    with pytest.raises(RuntimeError, match="left the trie"):
-        proc(ids(3, *armed(tk), stray), flat(tk))
+    out = proc(ids(3, *armed(tk), stray), flat(tk))
+
+    assert proc.desynchronised, "the caller must be able to see this happened"
+    assert not np.isneginf(out).all(), "a fully masked vocabulary stalls the sampler"
+
+    survivors = set(np.flatnonzero(~np.isneginf(out)).tolist())
+    assert survivors == set(tk.tokenize("\n")), "only the closing token remains"
