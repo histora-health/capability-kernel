@@ -260,3 +260,22 @@ def test_leaving_the_trie_clamps_rather_than_freeing(proc, tk, surf):
 
     survivors = set(np.flatnonzero(~np.isneginf(out)).tolist())
     assert survivors == set(tk.tokenize("\n")), "only the closing token remains"
+
+
+def test_a_token_after_a_completed_action_does_not_look_like_desynchronisation(proc, tk):
+    """The bug that made every successful action report a broken tokenizer.
+
+    gemma4 emits a channel marker immediately after the closing newline. The
+    action is over; the mask must already have released. Asking whether the
+    whole remaining path is an opcode answers a different question, and answers
+    it wrongly the moment anything follows.
+    """
+    done = armed(tk, body_text("move", {"target": "f_pano", "into": "std_endo"}))
+    after = tk.tokenize("Done.")
+
+    proc(ids(3), flat(tk))
+    out = proc(ids(3, *done, *after), flat(tk))
+
+    assert not proc.desynchronised, "a completed action is not a lost walk"
+    assert not proc.active
+    assert not np.isneginf(out).any(), "prose after an action is unconstrained"

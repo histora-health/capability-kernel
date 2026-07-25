@@ -169,7 +169,18 @@ class CapabilityProcessor:
             path = gen[i:]
             # A finished action releases the mask; prose after it is free until
             # the model arms again.
-            return None if self.surface.trie.is_complete(path) else path
+            #
+            # The question is whether the action ended, not whether the whole
+            # remaining path is an opcode. Those differ the moment one token
+            # arrives after a completed action: the path stops being complete,
+            # so the mask treated finished work as still in progress and
+            # reported desynchronisation on every successful action. Measured
+            # on gemma4, which emits <|channel|> straight after the closing
+            # newline.
+            for k in range(1, len(path) + 1):
+                if self.surface.trie.is_complete(path[:k]):
+                    return None
+            return path
         return None
 
     # ── The mask ─────────────────────────────────────────────────────────────
