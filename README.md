@@ -140,6 +140,30 @@ the study the file sits in. Both are legal opcodes; the mask cannot tell them
 apart. That one needs a better model or a better prompt, and saying so is more
 useful than implying the mechanism covers it.
 
+### And a Jacobian lens does not close the gap either
+
+The obvious next move is a semantic layer: read the model's internal workspace
+for the intent the surface cannot see. That was tested rather than assumed
+(**[benchmarks/RESULTS_JLENS.md](benchmarks/RESULTS_JLENS.md)**), with the mask
+and the [lens](https://huggingface.co/neuronpedia/jacobian-lens) attached to the
+same gemma-4-E4B instance in one process.
+
+| | asked − distractor floor |
+|---|---|
+| substituting case | 1.50 |
+| control | 0.87 |
+
+No separation — both on a floor of ~26. The workspace on the substituting case
+reads `filename · moveTo · destination · folder · filesystem · subdirectory`:
+generic file-operation vocabulary, not one clinical term. The substitution
+itself reproduced on E4B, so the failure happened and the lens did not register
+it.
+
+That is one readout, and the same lens separates malicious from benign intent on
+this model at 8 of 9 matched pairs. *Right record versus wrong record* is a
+harder discrimination than *malicious versus benign*, and this result is
+consistent with the lens working and the question being harder than the tool.
+
 ## Where this goes
 
 **[docs/BADMEMORY.md](docs/BADMEMORY.md)** reads this against *Bad Memory*
