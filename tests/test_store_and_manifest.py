@@ -30,6 +30,9 @@ def test_renaming_removes_the_old_name_from_nothing_but_changes_the_world(store)
     """Ids are stable across renames; it is the *entity set* that gates them."""
     before = set(enum_for(store, "rename", "target"))
     store.rename("f_pano", "panoramic_march.dcm")
+    # The rename left an audit outstanding, and while it is outstanding the
+    # surface is audit-only — so the enum has to be read after recording it.
+    store.audit("corrected filename")
     after = set(enum_for(store, "rename", "target"))
     assert before == after, "renaming does not change which entities exist"
     assert store.get("f_pano").name == "panoramic_march.dcm"
@@ -211,3 +214,59 @@ def test_only_decline_may_name_a_closed_record(store):
             if values is None or "std_hyg" not in values:
                 continue
             assert method in VIRTUAL, f"{method}.{arg} can name a closed record"
+
+
+# ── The phase controller: order, not just contents ───────────────────────────
+
+
+def test_a_change_leaves_nothing_reachable_but_recording_it(store):
+    """The ordering constraint, which is the thing a schema cannot express.
+
+    "This may only happen after that" is not a statement about shape, so no
+    JSON Schema says it. An automaton does.
+    """
+    from capability_kernel.manifest import enabled_methods
+
+    assert "move" in enabled_methods(store)
+    store.move("f_pano", "std_endo")
+    assert enabled_methods(store) == ("audit",)
+
+    store.audit("filed under the wrong study")
+    assert "move" in enabled_methods(store)
+
+
+def test_declining_is_unreachable_while_an_audit_is_outstanding(store):
+    """The one place refusing is not an option, and it has to be.
+
+    Everywhere else a surface that only permits acting is a bug — it is what
+    made the model rename the wrong study. Here, permitting a refusal would
+    permit exactly the state the rule exists to prevent: a change nobody
+    recorded. Auditing writes a note and touches nothing else, so forcing it
+    costs nothing that declining would have protected.
+    """
+    from capability_kernel.manifest import enabled_methods
+
+    store.rename("f_pano", "x.dcm")
+    assert "decline" not in enabled_methods(store)
+
+
+def test_every_mutating_method_arms_the_requirement(store):
+    for act in (lambda: store.rename("f_pano", "a.dcm"),
+                lambda: store.move("f_pano", "std_endo"),
+                lambda: store.set_metadata("f_pano", "stage", "pre-op")):
+        act()
+        assert store.pending_audit is not None
+        store.audit("because")
+        assert store.pending_audit is None
+
+
+def test_auditing_nothing_is_refused(store):
+    with pytest.raises(StoreError, match="nothing is awaiting"):
+        store.audit("a note about no change at all")
+
+
+def test_both_arms_see_the_same_narrowing(store):
+    """The baseline is given the same phase, or the comparison measures the
+    phase controller rather than the mask."""
+    store.move("f_pano", "std_endo")
+    assert [t["function"]["name"] for t in tool_schemas(store)] == ["audit"]

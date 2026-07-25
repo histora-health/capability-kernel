@@ -61,7 +61,7 @@ def test_the_mask_narrows_to_the_trie(proc, tokenizer):
     survivors = torch.nonzero(~torch.isinf(out[0])).flatten().tolist()
     assert 0 < len(survivors) < len(tokenizer)
     assert {tokenizer.decode([t]).strip() for t in survivors} == {
-        "re", "dec", "mov", "set"}, "the four methods, however this tokenizer splits them"
+        "re", "dec", "mov", "set", "a"}, "the manifest, however this tokenizer splits it"
 
 
 def test_a_forbidden_top_choice_is_removed(proc, tokenizer):

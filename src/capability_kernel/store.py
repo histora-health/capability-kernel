@@ -68,6 +68,13 @@ class ClinicalStore:
         self._folders: dict[str, Folder] = {}
         self._files: dict[str, File] = {}
         self.journal: list[str] = []
+        #: What was changed and not yet recorded. While this is set, the phase
+        #: controller narrows the surface to `audit` alone — so an unaudited
+        #: write is not a policy violation the model may commit and a reviewer
+        #: may catch. It is a state from which nothing but auditing can be
+        #: emitted. This is the ordering constraint a JSON schema cannot state:
+        #: "only after X" is not a shape.
+        self.pending_audit: str | None = None
 
     # ── Construction ─────────────────────────────────────────────────────────
 
@@ -154,6 +161,7 @@ class ClinicalStore:
 
         old, entity.name = entity.name, name
         self.journal.append(f"rename {target}: {old!r} -> {name!r}")
+        self.pending_audit = f"rename {target}"
         return f"renamed {old!r} to {name!r}"
 
     def move(self, target: str, into: str) -> str:
@@ -172,6 +180,7 @@ class ClinicalStore:
 
         was, f.folder_id = f.folder_id, into
         self.journal.append(f"move {target}: {was} -> {into}")
+        self.pending_audit = f"move {target}"
         return f"moved {f.name!r} into {dest.name!r}"
 
     def set_metadata(self, target: str, key: str, value: str) -> str:
@@ -188,6 +197,7 @@ class ClinicalStore:
 
         entity.metadata[key] = value
         self.journal.append(f"set_metadata {target}: {key}={value!r}")
+        self.pending_audit = f"set_metadata {target}"
         return f"set {key} to {value!r} on {entity.name!r}"
 
     # ── Internal ─────────────────────────────────────────────────────────────
@@ -196,6 +206,20 @@ class ClinicalStore:
         if isinstance(entity, File):
             return list(self.files_in(entity.folder_id))
         return list(self._folders.values())
+
+    def audit(self, note: str) -> str:
+        """Record why the last change was made, and reopen the surface.
+
+        The only method reachable while a change is unrecorded. It has no
+        precondition of its own beyond that, because a mechanism that can make
+        auditing unreachable has defeated its own purpose.
+        """
+        if self.pending_audit is None:
+            raise StoreError("nothing is awaiting an audit entry")
+        entry = f"audit {self.pending_audit}: {note}"
+        self.journal.append(entry)
+        self.pending_audit = None
+        return entry
 
     def snapshot(self) -> tuple:
         """Everything an action could change, comparable by equality.

@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 
 from .compiler import ARM, CLOSE, CompiledSurface, compile_surface
-from .manifest import MANIFEST, VIRTUAL, legal_values
+from .manifest import MANIFEST, VIRTUAL, enabled_methods, legal_values
 from .processor import CapabilityProcessor, Telemetry
 from .harness import Violation
 from .store import ClinicalStore, StoreError
@@ -153,13 +153,20 @@ class EnforcedChat:
             # transformers hands the processor batched tensors and llama.cpp
             # hands it numpy, so the wrapper has to match the backend. Both wrap
             # the same CapabilityProcessor — the decision procedure is one copy.
+            # The phase controller decides which methods have a path right
+            # now. Recomputed every step, because the previous action may have
+            # changed which ones do.
+            enabled = surface.indices_for(*enabled_methods(self.store))
+
             if type(self.backend).__name__ == "HFBackend":
                 from .hf import HFCapabilityProcessor
                 proc = HFCapabilityProcessor(surface, self.backend.tokenizer,
+                                             enabled=enabled,
                                              telemetry=self.telemetry)
             else:
                 proc = CapabilityProcessor(surface, ARM, self._detokenize,
                                            self._tokenize(CLOSE),
+                                           enabled=enabled,
                                            telemetry=self.telemetry)
 
             text = self.backend.generate(
@@ -214,6 +221,14 @@ class EnforcedChat:
             if v is not None:
                 self.violations.append(v)
                 turn.refused.append(f"{v.kind}: {method}({args}) — {v.detail}")
+                return None
+
+        if method == "audit":
+            try:
+                return Executed(method, args, self.store.audit(args.get("note", "")),
+                                changed=True)
+            except StoreError as exc:
+                turn.refused.append(f"audit: {exc}")
                 return None
 
         if method in VIRTUAL:
