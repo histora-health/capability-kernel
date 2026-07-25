@@ -10,12 +10,12 @@ Two arms share one manifest:
 * the token trie — the model *cannot* leave it (enforced)
 """
 
-from .harness import Harness, OllamaBackend, Turn, Violation
 from .manifest import MANIFEST, opcode_strings, surface_size, tool_schemas
+from .chat import EnforcedChat, Violation
 from .store import ClinicalStore, StoreError, demo_store
 
 __all__ = [
+    "EnforcedChat", "Violation",
     "ClinicalStore", "StoreError", "demo_store",
     "MANIFEST", "tool_schemas", "opcode_strings", "surface_size",
-    "Harness", "OllamaBackend", "Turn", "Violation",
 ]
