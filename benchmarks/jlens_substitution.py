@@ -301,13 +301,18 @@ def main() -> int:
         print(f"  traza por posición: pico pedido-piso = {r['peak_asked_over_floor']}"
               f" en la posición {r['peak_at_position']} de {len(trace)}")
 
-    results["_positive_control"] = control
-    results["_layers"] = {"lo": CAPAS_LO, "hi": CAPAS_HI, "capas": runtime.capas}
-
+    # Metadata goes beside the cases, not among them. Mixing them made the
+    # summary iterate over entries that have no probes and raise on the last
+    # line, after every number had already been computed.
+    payload = {
+        "cases": results,
+        "positive_control": control,
+        "layers": {"lo": CAPAS_LO, "hi": CAPAS_HI, "capas": runtime.capas},
+    }
     out_path = os.path.join(os.path.dirname(__file__),
                             f"jlens_substitution_{MODEL_KEY}.json")
     with open(out_path, "w") as fh:
-        json.dump(results, fh, indent=2, ensure_ascii=False)
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
 
     sub, ctrl = results["substitutes"], results["control"]
     print("\n" + "=" * 62)

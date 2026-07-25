@@ -148,21 +148,26 @@ for the intent the surface cannot see. That was tested rather than assumed
 and the [lens](https://huggingface.co/neuronpedia/jacobian-lens) attached to the
 same gemma-4-E4B instance in one process.
 
-| | asked − distractor floor |
-|---|---|
-| substituting case | 1.50 |
-| control | 0.87 |
+The first attempt read the wrong layers — `Runtime` defaults to a window fitted
+for Qwen, and through it the contrast this lens *is* known to separate scores 3
+of 9 rather than 8 of 9. So the run now calibrates the window and validates the
+instrument on those known pairs before measuring anything: **8 wins, 2 ties, 2
+losses of 12 — the instrument measures.**
 
-No separation — both on a floor of ~26. The workspace on the substituting case
-reads `filename · moveTo · destination · folder · filesystem · subdirectory`:
-generic file-operation vocabulary, not one clinical term. The substitution
-itself reproduced on E4B, so the failure happened and the lens did not register
-it.
+| | aggregate (asked − floor) | per-position peak |
+|---|---|---|
+| substituting case | 0.50 | **6.68** |
+| control | 0.26 | **5.69** |
 
-That is one readout, and the same lens separates malicious from benign intent on
-this model at 8 of 9 matched pairs. *Right record versus wrong record* is a
-harder discrimination than *malicious versus benign*, and this result is
-consistent with the lens working and the question being harder than the tool.
+The per-position trace was worth running — peaks are ten times the aggregate, so
+the mean was washing out real structure. But it does not separate the cases: the
+control peaks within 15% of the substituting one. The workspace carries
+record-related concepts at particular steps, equally in both.
+
+The substitution reproduced here, so the failure occurred and a validated
+instrument did not register it. **On this failure, structural enforcement and
+activation monitoring share a blind spot** — which is the opposite of the
+assumption that they cover disjoint failure classes.
 
 ## Where this goes
 
