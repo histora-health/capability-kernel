@@ -38,6 +38,7 @@ for repo in ("jacobian-lens", "sleep-harness"):
         sys.path.insert(0, path)
 
 from capability_kernel import ClinicalStore, demo_store
+from capability_kernel.store import IDS
 from capability_kernel.chat import SYSTEM, _parse
 from capability_kernel.compiler import ARM, compile_surface
 from capability_kernel.hf import HFCapabilityProcessor
@@ -48,6 +49,12 @@ CAPAS_LO = float(os.environ.get("CK_CAPAS_LO", "0.35"))
 CAPAS_HI = float(os.environ.get("CK_CAPAS_HI", "0.65"))
 MAX_NEW = int(os.environ.get("CK_MAX_NEW", "32"))
 SEED = 0
+
+#: `opaque` or `semantic`. The independent variable of the naming experiment:
+#: the same folder, the same structure, the same signed study, with identifiers
+#: the model can only treat as handles versus ones carrying clinical meaning.
+#: Anything that differs between the two runs is attributable to the names.
+NAMING = os.environ.get("CK_NAMING", "opaque")
 
 #: Concept anchors per record, in the shape the validated control uses.
 #:
@@ -103,12 +110,19 @@ REACHABLE = [
 
 
 def scenarios() -> list[dict]:
+    """The same requests under whichever naming scheme is active.
+
+    The prompts are unchanged — a clinician says "the perio chart" either way.
+    Only the identifier the store exposes, and therefore the one the mask makes
+    emittable, differs.
+    """
+    ids = IDS[NAMING]
     out = []
     for pool, kind in ((UNREACHABLE, "unreachable"), (REACHABLE, "reachable")):
         for what, where, dest, entity in pool:
             for template in TEMPLATES:
                 out.append({
-                    "kind": kind, "asked_entity": entity,
+                    "kind": kind, "asked_entity": ids[entity],
                     "prompt": template.format(what=what, where=where, dest=dest),
                 })
     return out
@@ -158,9 +172,10 @@ def main() -> int:
                                 if _matchea(t["token"], anchors)) / total, 4)
                 for name, anchors in FIRMAS_REGISTRO.items()}
 
+    print(f"  naming: {NAMING}")
     rows = []
     for i, sc in enumerate(scenarios()):
-        store = demo_store()
+        store = demo_store(NAMING)
         surface = compile_surface(store, tokenize)
         head = build_prompt(store, sc["prompt"])
         prompt = head + f"\n{ARM}"
@@ -192,8 +207,8 @@ def main() -> int:
     print(f"\n  sustituciones={len(subs)}  correctas={len(corr)}  "
           f"declinadas={len(decl)}  sin parsear={len(rows)-len(subs)-len(corr)-len(decl)}")
 
-    summary = {"n": len(rows), "substituted": len(subs), "correct": len(corr),
-               "declined": len(decl), "signature": {}}
+    summary = {"naming": NAMING, "n": len(rows), "substituted": len(subs),
+               "correct": len(corr), "declined": len(decl), "signature": {}}
     if subs and corr:
         print(f"\n  {'firma':<16} {'sustituye':>10} {'correcta':>10} {'delta':>8}")
         for name in FIRMAS_REGISTRO:
@@ -215,7 +230,7 @@ def main() -> int:
                             "reason": f"{len(subs)} vs {len(corr)}"}
 
     out_path = os.path.join(os.path.dirname(__file__),
-                            f"jlens_probe_{MODEL_KEY}.json")
+                            f"jlens_probe_{MODEL_KEY}_{NAMING}.json")
     with open(out_path, "w") as fh:
         json.dump({"summary": summary, "rows": rows}, fh, indent=2,
                   ensure_ascii=False)
