@@ -68,10 +68,20 @@ controls. Arming now happens on decoded text, wherever the word appears.
 renamed a *different* study — the nearest reachable target — and recorded it as
 a success. The baseline arm refused correctly. Removing the illegal action had
 converted a correct refusal into a wrong write on an intact record, which in a
-clinical folder is worse than the violation it prevented. The cause is
-structural: once the model arms, the mask requires it to finish *some* legal
-action. A surface containing only ways to act can only be satisfied by acting.
-Hence `decline`, which is now part of the manifest.
+clinical folder is worse than the violation it prevented.
+
+Two structural causes, both addressed:
+
+*Nothing but acting was reachable.* Once the model arms, the mask requires it to
+finish some legal action, and a surface containing only ways to act can only be
+satisfied by acting. Hence `decline`.
+
+*The right answer was unsayable.* The signed study was absent from every enum,
+so the model could not name the record it had been asked about — the surface
+offered it nothing but other records. So `decline` alone reads
+`store.nameable()`, which returns everything including closed records. **Naming
+is not acting**, and a closed record is now nameable exactly once: to be
+declined. `benchmarks/substitution.py` measures whether that is what fixed it.
 
 **It does not make an action correct.** Asked to tag a file, the model tagged
 the study the file sits in. Both are legal opcodes; the mask cannot tell them

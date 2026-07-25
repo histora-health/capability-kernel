@@ -124,6 +124,20 @@ class ClinicalStore:
         """Entities whose metadata may be set."""
         return self.renameable()
 
+    def nameable(self) -> list[Entity]:
+        """Every entity, including the ones nothing may be done to.
+
+        Not a capability — the opposite. It exists because making the forbidden
+        entity *unnameable* is what produced the worst failure measured here:
+        told to rename a signed study, the model renamed a different one. It had
+        no way to say which study it had been asked about, so it said something
+        it could say.
+
+        Naming is not acting. This list is used only by ``decline``, so a closed
+        record can be referred to and nothing else.
+        """
+        return list(self._folders.values()) + list(self._files.values())
+
     # ── Operations ───────────────────────────────────────────────────────────
 
     def rename(self, target: str, name: str) -> str:

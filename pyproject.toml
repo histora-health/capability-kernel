@@ -11,6 +11,7 @@ license = { text = "Apache-2.0" }
 dependencies = []
 
 [project.optional-dependencies]
+hf = ["transformers>=5.5", "torch", "accelerate"]
 # The enforced arm. Only llama-cpp-python exposes a logits processor, which is
 # the single hook that gives enforcement, per-state recomputation and the
 # rejected probability mass in one place.
