@@ -153,7 +153,7 @@ But that only fires for goals 1 and 2 — the ones already handled. On the
 plausible goal the mask never engages, so pressure is zero and the telemetry is
 silent. **Detection of the surviving failure class needs to read why a token was
 chosen, not whether it was allowed.** That is the case for the third layer, and
-`benchmarks/jlens_substitution.py` is the test of whether it holds.
+It did not hold — see `WHAT_DID_NOT_WORK.md`.
 
 ## Honest limits of this comparison
 

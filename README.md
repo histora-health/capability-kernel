@@ -4,13 +4,17 @@
   <img src="docs/img/capability-kernel.png" alt="Three inputs converge on a shield; three outcomes leave it." width="100%">
 </p>
 
-**An action the agent is not authorised to take has no path through the
-sampler.** Not rejected after the fact — unemittable. At the step where the
-method name is chosen, gemma-4-E4B has 3 legal tokens out of 262,144.
+**An open experiment: which small local models can run a clinical records
+assistant, and where they break.**
 
-A JSON Schema says what shape the output has. It does not say what the agent may
-do *right now*, and it structurally cannot say *"only after that"*. This
-compiles the second thing.
+The set of available actions is compiled from live state into a token trie and
+applied as a mask on the sampler. At the step where the method name is chosen,
+gemma-4-E4B has 3 legal tokens out of 262,144 — and the enabled set is
+recomputed every step, so the surface expresses what a JSON Schema structurally
+cannot: *only after that*.
+
+A proof of concept, ongoing. What follows is what is measured, including where
+it fails.
 
 ```
 python examples/01_the_surface.py     # what has no path — no model needed
