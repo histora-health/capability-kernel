@@ -1,5 +1,17 @@
 # Plan — a firmware layer for clinical agents
 
+> **This is the plan as written, kept as a record of what was decided in advance
+> — the gates especially, since a gate chosen after seeing the numbers is not a
+> gate. All six milestones are done. For what the code actually is now, read
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), which is the living reference;
+> for the verdict against these gates,
+> [benchmarks/RESULTS_VALIDATION.md](benchmarks/RESULTS_VALIDATION.md).**
+>
+> Two things here did not survive contact with the work. `reference.py` is named
+> in M2 and M5; it became `resolvers.py` plus `firmware/operand.py` and the shim
+> is gone. And the friction gate below measures inspections, which turned out to
+> describe nothing a clinician experiences — the correction is in the results.
+
 EAT called it Firmware and implemented it as a string in a system prompt:
 
 ```python
@@ -180,6 +192,8 @@ exists, and why Case A leads.
 ---
 
 ## Milestones
+
+All six done, 2026-07-26.
 
 ### M0 · Firmware core
 
