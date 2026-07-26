@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 
 from capability_kernel import demo_store
-from capability_kernel.compiler import ARM, OPEN, action_text, body_text, compile_surface
-from capability_kernel.processor import CapabilityProcessor, Telemetry
+from compiler import ARM, OPEN, action_text, body_text, compile_surface
+from processor import CapabilityProcessor, Telemetry
 
 from test_compiler import WordTokenizer
 

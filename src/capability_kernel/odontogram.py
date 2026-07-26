@@ -132,8 +132,6 @@ class Odontogram:
         self.journal.append(entry)
         return f"recorded {self.value_set.describe(code)} on tooth {tooth}, {surface}"
 
-    def decline(self, reason: str) -> str:
-        return reason
 
     def describe(self) -> str:
         """The dentition, for the model's context."""

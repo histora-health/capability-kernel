@@ -18,8 +18,8 @@ torch = pytest.importorskip("torch")
 transformers = pytest.importorskip("transformers")
 
 from capability_kernel import demo_store
-from capability_kernel.compiler import ARM, compile_surface
-from capability_kernel.hf import HFCapabilityProcessor
+from compiler import ARM, compile_surface
+from hf import HFCapabilityProcessor
 
 TINY = "hf-internal-testing/tiny-random-gpt2"
 

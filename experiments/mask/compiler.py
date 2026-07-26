@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .manifest import MANIFEST, legal_values
-from .store import ClinicalStore
-from .trie import SlotSpec, TokenTrie
+from capability_kernel.manifest import MANIFEST, legal_values
+from capability_kernel.store import ClinicalStore
+from trie import SlotSpec, TokenTrie
 
 #: Wraps every action. Chosen for tokenizer-friendliness rather than
 #: aesthetics: ordinary punctuation that every BPE vocabulary splits the same

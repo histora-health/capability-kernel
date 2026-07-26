@@ -1,82 +1,55 @@
-"""Layer two: order forced at the system level.
-
-Clinical process rules compile into tool availability, so an incorrect sequence
-is unreachable from the orchestrator rather than rejected after the fact.
+"""Block two: order forced at the system level.
 
 This is the class of rule a JSON Schema structurally cannot state. A schema says
 what shape an argument has; it cannot say *"this may only happen after that"*,
-because that is not a statement about shape. A surface enumerated from live
-state can, because the set of methods with a path is recomputed at every step.
+because that is not a statement about shape. A surface computed from live state
+can, because the set of available methods is recomputed every turn.
 
-The rule demonstrated here is one every clinical system has and none can express
-in a schema: **a change that has not been recorded admits nothing but recording
-it.** Not "the harness rejects a second write" — while the audit is outstanding,
-no token that begins a second write has a path.
+The rule shown here is one every clinical system has: **a change that has not
+been recorded admits nothing but recording it.** Not "the harness rejects the
+second write" — while the audit is outstanding, a second write is not among the
+tools the model is given.
 
-    python examples/02_forced_order.py
+    PYTHONPATH=src python examples/02_forced_order.py
 
-No model. This shows what the surface permits, which is a property of the
-compiled artefact — see `03_with_a_model.py` for whether a model then complies.
+No model. This shows what the surface permits, which is a property of a computed
+artefact. Whether a model then complies is `03_the_agent.py`.
 """
 
 from __future__ import annotations
 
-from transformers import AutoTokenizer
-
-from capability_kernel import demo_store
-from capability_kernel.compiler import ARM, compile_surface
-from capability_kernel.manifest import enabled_methods, tool_schemas
-
-TOKENIZER = "hf-internal-testing/tiny-random-gpt2"
+from capability_kernel import CLINICAL, demo_store
 
 
-def show(store, tok, tokenize, caption: str) -> None:
-    """What the sampler may emit, and what a tool-calling harness would be told.
-
-    Both are printed because they should agree. The mask and the schema compile
-    from the same declaration, so a divergence between these two lines is a bug
-    rather than a design choice.
-    """
-    surface = compile_surface(store, tokenize)
-    allowed = enabled_methods(store)
-    nxt = surface.trie.next_tokens([])
-
-    # The trie holds every opcode; the phase controller decides which of them
-    # the processor is allowed to reach right now.
-    reachable = surface.indices_for(*allowed)
-    words = sorted({surface.trie.opcodes[i][1] for i in reachable})
-
+def show(store, caption: str) -> None:
     print(f"\n   {caption}")
-    print(f"     phase controller says : {allowed}")
-    print(f"     reachable opcodes     : {len(reachable)} of {len(surface.trie)}")
-    print(f"     methods with a path   : {words}")
-    print(f"     tools a harness sees  : "
-          f"{[t['function']['name'] for t in tool_schemas(store)]}")
+    print(f"     methods available : {CLINICAL.enabled_methods(store)}")
+    print(f"     tools the model sees : "
+          f"{[t['function']['name'] for t in CLINICAL.tool_schemas(store)]}")
+    print(f"     distinct actions  : {sum(CLINICAL.surface_size(store).values())}")
 
 
 def main() -> None:
-    tok = AutoTokenizer.from_pretrained(TOKENIZER)
-    tokenize = lambda s: tok.encode(s, add_special_tokens=False)
     store = demo_store()
 
     print("A clinical folder, and one rule: nothing may be changed twice")
     print("without saying why in between.\n")
     print("=" * 70)
 
-    show(store, tok, tokenize, "Nothing outstanding — the full surface")
+    show(store, "Nothing outstanding — the full surface")
 
     print("\n" + "=" * 70)
     print("\n   The model moves a file:")
     print(f"     {store.move('f_pano', 'std_endo')}")
     print(f"     store.pending_audit = {store.pending_audit!r}")
 
-    show(store, tok, tokenize, "A change is unrecorded — the surface collapses")
+    show(store, "A change is unrecorded — the surface collapses")
 
     print("\n   Every other method just stopped existing. A second move is not")
-    print("   a call that gets refused; there is no path that spells one.")
+    print("   a call that gets refused; it is not among the tools offered.")
     print("   Note that `decline` is gone too — the model cannot refuse to")
     print("   record what it already did. That is the only place in this")
-    print("   manifest where refusing is unreachable, and it has to be: a state")
+    print("   manifest where refusing is unavailable, and it has to be: a state")
     print("   you can decline your way out of is a state that permits exactly")
     print("   the thing the rule exists to prevent.")
 
@@ -84,22 +57,24 @@ def main() -> None:
     print("\n   The model records it:")
     print(f"     {store.audit('was filed under the wrong study')}")
 
-    show(store, tok, tokenize, "Recorded — the surface reopens")
+    show(store, "Recorded — the surface reopens")
 
     print("\n" + "=" * 70)
     print("\n   The journal, which is now guaranteed rather than hoped for:\n")
     for entry in store.journal:
         print(f"     {entry}")
 
-    print("\n   That guarantee is the point. A validator can enforce the same")
-    print("   rule by rejecting the second write — but a rejection is a call")
-    print("   the model produced, that the harness caught, fed back, and hoped")
-    print("   was retried correctly. Measured on gemma4:12b, the unmasked arm")
-    print("   emitted 14 malformed calls and completed 0 of 10 tasks; retrying")
-    print("   is not free.")
+    print("\n   That guarantee is the point. A validator enforces the same rule")
+    print("   by rejecting the second write — but a rejection is a call the")
+    print("   model produced, that the harness caught, fed back, and hoped was")
+    print("   retried correctly. Correcting badly after a rejection is the")
+    print("   specific thing small models do, which is why the surface narrows")
+    print("   instead: 14 malformed calls in 30 turns, 0 of 10 tasks completed.")
 
-    print("\n   What this does NOT show: that a model complies. It shows what")
-    print("   the surface permits. Compliance is 03_with_a_model.py.")
+    print("\n   The same ordering is also enforced as a firmware rule at the")
+    print("   decision point — see `firmware/clinical.py`, `audit_first`.")
+    print("   Belt and braces on purpose: the surface is the usability")
+    print("   mechanism, the rule is the one that has to hold.")
 
 
 if __name__ == "__main__":

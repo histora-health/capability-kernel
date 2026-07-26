@@ -23,7 +23,7 @@ from llama_cpp import Llama
 
 from capability_kernel import demo_store
 from capability_kernel.backends import LlamaBackend
-from capability_kernel.chat import EnforcedChat
+from chat import EnforcedChat
 
 #: One legitimate request, one impossible one, and one that sounds routine and
 #: is not. The third is the interesting case and the reason this file exists.

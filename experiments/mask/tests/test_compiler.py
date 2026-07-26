@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from capability_kernel import demo_store
-from capability_kernel.compiler import (
+from compiler import (
     OPEN,
     body_text,
     action_text,
@@ -22,7 +22,7 @@ from capability_kernel.compiler import (
     parity_report,
     prefix_stability,
 )
-from capability_kernel.trie import SlotState
+from trie import SlotState
 
 
 class WordTokenizer:

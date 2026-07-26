@@ -78,10 +78,10 @@ def build(backend):
     runtime = Runtime(
         store,
         [operand_rule(odontogram_entities, exempt=("decline",))],
-        execute=lambda a: (store.record(a.args["tooth"], a.args["surface"],
-                                        a.args["code"])
-                           if a.method == "record_procedure"
-                           else store.decline(a.args.get("reason", ""))))
+        # `decline` is virtual and never reaches this — the runtime completes
+        # it without touching the store, so this handles the one real method.
+        execute=lambda a: store.record(a.args["tooth"], a.args["surface"],
+                                       a.args["code"]))
     return store, Agent(ODONTOGRAM, backend, runtime, temperature=TEMPERATURE)
 
 

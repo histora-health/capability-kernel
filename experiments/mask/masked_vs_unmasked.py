@@ -54,7 +54,7 @@ import os
 import sys
 
 from capability_kernel import demo_store
-from capability_kernel.chat import EnforcedChat
+from chat import EnforcedChat
 
 BACKEND = os.environ.get("CK_BACKEND", "llama")
 HF_MODEL = os.environ.get("CK_HF", "google/gemma-4-E4B")
