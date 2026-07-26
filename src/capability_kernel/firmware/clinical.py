@@ -12,7 +12,9 @@ surface never offered is exactly the failure this layer was built for.
 
 from __future__ import annotations
 
-from .. import reference
+from ..manifest import CLINICAL
+from ..resolvers import Entity
+from .operand import operand_rule
 from .rules import Action, Context, Enforce, Rule, Trigger
 
 
@@ -37,18 +39,15 @@ def _audit_first(action: Action, store, _: Context):
     return None
 
 
-def _operand_matches(action: Action, store, context: Context):
-    """The target must correspond to something the request named.
+def clinical_entities(store) -> list[Entity]:
+    """Every record a request could refer to, closed ones included.
 
-    Enforced as INSPECT rather than BLOCK, and the distinction is the point.
-    Blocking claims the action is wrong; this claims the system cannot tell.
-    The request may simply have been phrased in a way the resolver does not
-    cover, and a guard that blocks legitimate work is a guard that gets
-    switched off.
+    Closed records must resolve, or the rule is blind exactly where the failure
+    happens: substitution follows a request about a record nothing may be done
+    to, so a resolver that could not see them would return nothing precisely
+    when it matters.
     """
-    if action.method in ("decline", "audit") or not action.target:
-        return None
-    return reference.check(store, context.request, action.target)
+    return [Entity(e.id, e.name) for e in store.nameable()]
 
 
 CLINICAL_RULES = [
@@ -58,7 +57,5 @@ CLINICAL_RULES = [
     Rule("audit_first", _audit_first, Enforce.BLOCK, Trigger.BEFORE_ACTION,
          priority=20,
          description="an unrecorded change must be audited before anything else"),
-    Rule("operand_matches", _operand_matches, Enforce.INSPECT,
-         Trigger.BEFORE_ACTION, priority=30,
-         description="the action names a record the request does not"),
+    operand_rule(clinical_entities, exempt=("decline", "audit")),
 ]

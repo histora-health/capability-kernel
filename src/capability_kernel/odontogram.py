@@ -43,6 +43,17 @@ class Tooth:
     present: bool = True
 
     @property
+    def id(self) -> str:
+        return self.fdi
+
+    @property
+    def name(self) -> str:
+        """What a clinician would say. The resolver matches on this, so
+        "el 36" and "tooth 36" both reach the same record."""
+        kind = "incisor" if self.anterior else "molar"
+        return f"tooth {self.fdi} {kind}"
+
+    @property
     def anterior(self) -> bool:
         return self.fdi[-1] in "123"
 
@@ -82,6 +93,17 @@ class Odontogram:
         """Present so a domain-agnostic runtime can resolve a target."""
         return self.teeth.get(fdi)
 
+    def nameable(self) -> list[Tooth]:
+        """Every tooth, absent ones included.
+
+        Absent teeth resolve even though nothing can be recorded on them —
+        which is the same reason closed records resolve in the clinical
+        domain. A dictation naming tooth 16 must be recognisable as being about
+        tooth 16, or the operand rule cannot tell a substitution from a request
+        it simply did not understand.
+        """
+        return list(self.teeth.values())
+
 
 def demo_odontogram() -> Odontogram:
     """Upper right quadrant, with 16 missing.
@@ -98,8 +120,14 @@ def demo_odontogram() -> Odontogram:
 #: `surface` depends on `tooth`, and `code` on `surface`. Each source takes the
 #: arguments chosen so far, which is what lets one model call produce a complete
 #: and valid procedure instead of three round trips.
+def odontogram_entities(store) -> list:
+    from .resolvers import Entity
+    return [Entity(t.id, t.name) for t in store.nameable()]
+
+
 ODONTOGRAM = Domain(
     name="odontogram",
+    nameable=odontogram_entities,
     methods={
         "record_procedure": Method(
             name="record_procedure",
