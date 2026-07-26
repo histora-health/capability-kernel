@@ -1,10 +1,12 @@
-"""Forcing the order of operations — the part a JSON Schema cannot do.
+"""Layer two: order forced at the system level.
 
-A schema says what shape an argument has. It cannot say *"this may only happen
-after that"*, because that is not a statement about shape. Enumerating a
-capability surface from live state can: the set of methods with a path through
-the trie is recomputed at every step, so a method can stop existing and start
-existing again as the world moves.
+Clinical process rules compile into tool availability, so an incorrect sequence
+is unreachable from the orchestrator rather than rejected after the fact.
+
+This is the class of rule a JSON Schema structurally cannot state. A schema says
+what shape an argument has; it cannot say *"this may only happen after that"*,
+because that is not a statement about shape. A surface enumerated from live
+state can, because the set of methods with a path is recomputed at every step.
 
 The rule demonstrated here is one every clinical system has and none can express
 in a schema: **a change that has not been recorded admits nothing but recording

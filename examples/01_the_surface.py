@@ -1,8 +1,13 @@
-"""The whole argument, without downloading a model.
+"""Layer one: an option surface derived from live state.
 
-Everything the mechanism claims can be shown before a single token is generated,
-because the claim is about what is *reachable*, not about what a model chooses.
-This runs in about a second and needs only a tokenizer.
+Tools and argument enums are not fixed schemas. They are regenerated from the
+state of the system, so a signed record disappears from the possible values the
+moment it is signed — and what disappears has no path through the sampler, not a
+rejection waiting downstream.
+
+This runs in about a second and needs only a tokenizer, because what it shows is
+a property of the compiled artefact rather than a statistic over samples. It
+shows nothing about whether a model complies; that is 03.
 
     pip install -e ".[hf]"
     python examples/01_the_surface.py

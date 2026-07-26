@@ -1,9 +1,11 @@
-"""What a real model does, with and without the mask — including where it hurts.
+"""What a real model does, both ways — including the silent substitution.
 
-The first two examples show what the compiled surface *permits*. That is a
-property of an artefact and it is the auditability claim, but it says nothing
-about behaviour. This one runs a model both ways on the same prompts and prints
-the difference, including the column that goes the wrong way.
+The first two examples show what the compiled surface permits, which is a
+property of an artefact and says nothing about behaviour. This one runs a model
+with and without the mask on the same prompts, and shows the failure the other
+two cannot: constrained decoding forces the model to always choose a valid
+option, so when the record it was asked about is blocked it does not stop — it
+keeps the intent, substitutes a permitted target, and acts on the wrong record.
 
     B=$(ollama show --modelfile gemma4:12b | grep -m1 '^FROM' | sed 's/^FROM //') \\
       PYTHONPATH=src python examples/03_with_a_model.py
@@ -82,26 +84,25 @@ def main() -> int:
   and produced 14 malformed calls; the masked arm completed 10 of 10 with none.
   That is not a safety result — it is a small local model becoming usable.
 
-  The second is where the security claim lives, and it is smaller than it
-  sounds. Both arms end with the signed study untouched. The unmasked arm got
-  there by generating a forbidden call and having it rejected; the masked arm
-  by having no path to one. Same outcome, different guarantee — which matters
-  when the validator is absent, incomplete, or bypassed, and not otherwise.
+  The second is smaller than it sounds. Both arms end with the signed study
+  untouched: the unmasked arm generated a forbidden call and had it rejected,
+  the masked arm had no path to one. Same outcome, different guarantee — and
+  post-hoc validation was not defeated in any arm measured.
 
-  The third is the one to be honest about. The perio chart cannot be moved, and
-  under the mask the model moves a DIFFERENT file to the requested destination
-  and reports success. Measured 5 of 5 at temperature 0.7, reproduced on
-  gemma-4-E4B, and unchanged by making the identifiers semantically explicit.
-  The unmasked arm refuses in prose instead.
+  The third is silent substitution. The perio chart cannot be moved, and under
+  the mask the model moves a DIFFERENT file to the requested destination and
+  reports success — 5 of 5 at temperature 0.7, reproduced on gemma-4-E4B. The
+  unmasked arm refuses in prose instead.
 
-  Enforcement did not fail to prevent that. It is a fair reading that it caused
-  it: a model that cannot do what was asked must still finish some legal action
-  once it commits, while an unconstrained one can simply say no.
+  It is silent because no schema or validator detects it: the emitted action is
+  technically legal and every argument belongs to the permitted vocabulary, so
+  nothing is violated and nothing is logged.
 
-  Which is why the deployable shape is propose-and-confirm rather than
-  autonomous writes, and why `decline` had to become a capability in the
-  manifest — see docs/WHAT_DID_NOT_WORK.md for the four experiments that failed
-  to detect this failure from the model's internal state.
+  Two layers of the architecture exist because of it. Reference verification
+  blocks an action whose target does not overlap the entities the request named
+  (capability_kernel.reference), and propose-and-confirm keeps a person between
+  the proposal and the write. Four attempts to detect it from the model's
+  internal state returned null — docs/WHAT_DID_NOT_WORK.md.
 """)
     return 0
 

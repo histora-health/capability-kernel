@@ -10,11 +10,11 @@ the same model instance in one process.
 
 ## The question
 
-The mask makes an unauthorised action unemittable. It cannot distinguish two
-*authorised* actions, and one of them is the failure that matters: told to act on
-a record it cannot touch, the model performs a legal action on a **different**
-record and reports success (`benchmarks/RESULTS_SUBSTITUTION.md`, 6 of 20,
-reproduced across two model families).
+Constrained decoding removes the unauthorised action. It cannot distinguish two
+*authorised* ones, and that gap is silent substitution: told to act on a blocked
+record, the model keeps the intent, substitutes a permitted target and executes
+on the wrong record (`benchmarks/RESULTS_SUBSTITUTION.md`, reproduced across two
+model families).
 
 The obvious answer is a semantic layer — read the model's internal workspace for
 the intent the surface cannot see. Four instruments were tried. None of them
