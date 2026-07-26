@@ -397,19 +397,20 @@ inspection, or logged. The one that used to be silent has a rule.
 
 Stated here so it is not discovered late.
 
-**Coverage.** The whole design rests on native tool calling working well enough
-on a local model, and the evidence is one anecdotal observation. The 0-of-10
-figure was measured with a text protocol, which is a different thing. This is
-the first question the PoC answers.
+**Coverage — answered.** 0.80 for coding with the gap entirely attributable to
+value-set structure, 0.944 for ingestion. Native tool calling on a local model
+works; the text protocol was what did not.
 
 **Friction.** Filing a study competes with dragging a file, which is already
 fast. An assistant that parses a sentence and waits for confirmation may be
 slower than what it replaces. Procedure coding has the better product argument
 — dictating beats navigating a coding tree — which is why it leads.
 
-**Operand verification at scale.** String overlap, tested on three measured
-substitutions. In production a guard that blocks legitimate work gets switched
-off, and false positives have not been measured.
+**Operand verification across languages.** Zero false positives on twenty-five
+requests including Spanish — but the entity names are English and the overlap
+works because clinical vocabulary is cognate. "la ficha de encías" against
+`perio_chart.pdf` shares nothing, and that is the case EmbeddingGemma exists
+for.
 
 **Enumeration at scale.** A demo folder has seven entities. A real clinical
 history has hundreds, and the ceiling has been named but not measured.
@@ -417,6 +418,28 @@ history has hundreds, and the ceiling has been named but not measured.
 ---
 
 ## 10. Changelog
+
+**2026-07-26** — M5 done, and two of the gates turned out to be measuring the
+wrong thing.
+
+**Friction was defined as inspections and both cases scored 0.0.** That number
+is true and describes nothing a user experiences: under propose-and-confirm
+every proposal needs a person, so friction is one confirmation per action and
+adjudications are the rare extra on top. Restating it is what decides Case B —
+ten seconds plus a confirmation loses to dragging a file.
+
+**And 0.0 inspections also meant the operand rule never fired in either run**,
+so the friction number was hiding a guard that had not been exercised.
+`benchmarks/validation.py` measures it directly: zero false positives across
+twenty-five legitimate requests in three domains and two languages, and three of
+three measured substitutions still caught. That false-positive rate is the
+number that decides whether a guard survives production, because one that blocks
+real work gets switched off.
+
+Verdict: Case A ships after keying the value set by material as well as surface,
+which closes the whole coverage gap. Case B does not ship and was never the
+product case; it validated the orderings under a planted override and the
+operand rule on a second domain, which is what it was built for.
 
 **2026-07-26** — M4 done. `ingestion.py` is Case B, with the DICOM note as the
 injection vector and two orderings the option surface enforces by absence:

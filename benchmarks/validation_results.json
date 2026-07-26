@@ -1,0 +1,49 @@
+{
+  "cases": {
+    "coding": {
+      "coverage": 0.8,
+      "wrong_operand": 0,
+      "wrong_code": 4,
+      "friction": 0.0,
+      "latency_p95_s": 8.12,
+      "latency_median_s": 3.48
+    },
+    "ingestion": {
+      "coverage": 0.944,
+      "friction": 0.0,
+      "latency_p95_s": 16.75,
+      "latency_median_s": 10.35,
+      "export_without_anonymisation": 0,
+      "wrote_to_signed": 0
+    }
+  },
+  "operand_rule": {
+    "false_positive_rate": 0.0,
+    "false_positives": 0,
+    "legitimate_requests": 25,
+    "by_domain": {
+      "clinical": 0,
+      "odontogram": 0,
+      "ingestion": 0
+    },
+    "detail": {
+      "clinical": {
+        "n": 10,
+        "fired": []
+      },
+      "odontogram": {
+        "n": 10,
+        "fired": []
+      },
+      "ingestion": {
+        "n": 5,
+        "fired": []
+      }
+    },
+    "true_positives": {
+      "n": 3,
+      "caught": 3
+    }
+  },
+  "confirmations_per_action": 1.0
+}
