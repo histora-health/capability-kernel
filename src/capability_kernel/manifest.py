@@ -1,21 +1,19 @@
-"""The capability manifest: what exists, and what may be done right now.
+"""The capability manifest for case A: a clinical folder.
 
-One declaration, two compilation targets.
+One declaration, from which both the tools offered each turn and the rules'
+notion of what is legal are computed. A single place to be wrong, rather than
+two that drift apart — which is most of what this file is for.
 
-* :func:`tool_schemas` — JSON-schema tool definitions for a model with native
-  function calling. The model is *asked* to stay inside them.
-* the token trie (``compiler.py``) — the same surface as a logit mask. The model
-  *cannot* leave them.
+Argument values are **enumerated from live state**, not validated against it.
+The schema for ``rename`` does not say "a string"; it says which entity ids
+exist and are renameable at this moment. A signed study is not among them, so it
+is not something the model is offered — and the ordering and authority rules in
+``firmware/clinical.py`` state the same constraints again at the decision point,
+deliberately: the surface is the usability mechanism, the rules are what has to
+hold.
 
-Both read the same manifest and the same store, which is the point: the two arms
-differ in enforcement, not in what they consider legal. Anything else would make
-the comparison meaningless.
-
-Argument values are **enumerated from live state**, not validated against it. The
-schema for ``rename`` does not say "a string"; it says which entity ids exist and
-are renameable at this moment. A signed study is not in the enum, so in the
-enforced arm it is unnameable — and in the baseline arm the model was told, and
-may still say it.
+``experiments/mask/`` compiles this same manifest into a token trie and applies
+it as a logit mask. That is the retired approach; see its README.
 """
 
 from __future__ import annotations
@@ -149,8 +147,8 @@ def tool_schemas(store: ClinicalStore) -> list[dict]:
 
 
 
-def opcode_strings(store: ClinicalStore, method: str) -> list[str]:
-    return CLINICAL.opcode_strings(store, method)
+def action_strings(store: ClinicalStore, method: str) -> list[str]:
+    return CLINICAL.action_strings(store, method)
 
 
 def surface_size(store: ClinicalStore) -> dict[str, int]:

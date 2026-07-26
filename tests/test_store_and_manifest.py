@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from capability_kernel import ClinicalStore, StoreError, demo_store
-from capability_kernel.manifest import legal_values, opcode_strings, surface_size, tool_schemas
+from capability_kernel.manifest import legal_values, action_strings, surface_size, tool_schemas
 
 
 @pytest.fixture
@@ -143,15 +143,15 @@ def test_delete_is_not_in_the_manifest():
 # ── The trie's input ─────────────────────────────────────────────────────────
 
 
-def test_opcode_strings_enumerate_real_ids(store):
-    ops = opcode_strings(store, "move")
+def test_action_strings_enumerate_real_ids(store):
+    ops = action_strings(store, "move")
     assert "move(target=f_pano, into=std_endo)" in ops
     assert not any("std_hyg" in o for o in ops), "signed study is not a destination"
     assert len(ops) == surface_size(store)["move"]
 
 
 def test_free_text_arguments_become_slots(store):
-    ops = opcode_strings(store, "rename")
+    ops = action_strings(store, "rename")
     assert all("name={slot}" in o for o in ops)
 
 
