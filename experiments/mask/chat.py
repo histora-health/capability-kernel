@@ -24,10 +24,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from .compiler import ARM, CLOSE, CompiledSurface, compile_surface
-from .manifest import MANIFEST, VIRTUAL, enabled_methods, legal_values
-from .processor import CapabilityProcessor, Telemetry
-from .store import ClinicalStore, StoreError
+from compiler import ARM, CLOSE, CompiledSurface, compile_surface
+from capability_kernel.manifest import MANIFEST, VIRTUAL, enabled_methods, legal_values
+from processor import CapabilityProcessor, Telemetry
+from capability_kernel.store import ClinicalStore, StoreError
 
 SYSTEM = """\
 You manage a patient's clinical folder. It has studies (folders) and files
@@ -176,7 +176,7 @@ class EnforcedChat:
             enabled = surface.indices_for(*enabled_methods(self.store))
 
             if type(self.backend).__name__ == "HFBackend":
-                from .hf import HFCapabilityProcessor
+                from hf import HFCapabilityProcessor
                 proc = HFCapabilityProcessor(surface, self.backend.tokenizer,
                                              enabled=enabled,
                                              telemetry=self.telemetry)

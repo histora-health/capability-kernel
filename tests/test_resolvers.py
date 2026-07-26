@@ -1,9 +1,14 @@
-"""The guard for the failure that survived the mask, the lens and the probe.
+"""The guard for the failure the option surface does not catch.
 
 Every case here is taken from a measured run. The substitution cases are what
 gemma4:12b and gemma-4-E4B actually emitted; the ordinary cases are the requests
 the guard must not fire on, because a guard that blocks real work gets turned
-off and then protects nothing.
+off and then protects nothing — which `benchmarks/validation.py` later measured
+across twenty-five of them and three domains.
+
+These test `resolvers` and `firmware.operand` directly. They used to go through
+`reference.py`, a shim kept while the logic moved; the shim is gone and the
+tests point at the modules that do the work.
 """
 
 from __future__ import annotations
@@ -11,12 +16,26 @@ from __future__ import annotations
 import pytest
 
 from capability_kernel import demo_store
-from capability_kernel.reference import check, resolve
+from capability_kernel.firmware.operand import check as _check
+from capability_kernel.resolvers import DEFAULT, Entity
 
 
 @pytest.fixture
 def store():
     return demo_store()
+
+
+def entities(store):
+    return [Entity(e.id, e.name) for e in store.nameable()]
+
+
+def check(store, message, target):
+    return _check(entities(store), message, target)
+
+
+def resolve(store, message):
+    found = DEFAULT.candidates(entities(store), message)
+    return found[0] if found else None
 
 
 # ── The measured failures ────────────────────────────────────────────────────

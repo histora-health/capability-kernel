@@ -85,12 +85,19 @@ class Runtime:
         the method on the store, which is what the clinical domain does;
         injectable so a domain whose actions are not store methods can use this
         without pretending they are.
+    :param virtual: methods that change nothing — `decline` is the one every
+        domain has. Committing one is a no-op that returns its reason, and it
+        never reaches `execute`. Without this a caller has to put a fake
+        `decline` on the store, which is exactly the pretending `execute` exists
+        to avoid, and which both case benchmarks were quietly doing.
     """
 
-    def __init__(self, store, rules: list[Rule], *, execute=None) -> None:
+    def __init__(self, store, rules: list[Rule], *, execute=None,
+                 virtual: tuple[str, ...] = ("decline",)) -> None:
         self.store = store
         self.rules = sorted(rules, key=lambda r: r.priority)
         self.journal = Journal()
+        self.virtual = frozenset(virtual)
         self._execute = execute or self._call_store
 
     # ── The decision point ───────────────────────────────────────────────────
@@ -145,7 +152,7 @@ class Runtime:
             self.journal.record("stale", fresh, proposal.context)
             raise Refused(f"state changed since the proposal: {fresh}")
 
-        result = self._execute(proposal.action)
+        result = self._perform(proposal.action)
         self.journal.record("committed", fresh, proposal.context, result=result)
         return result
 
@@ -159,6 +166,12 @@ class Runtime:
         return self.commit(proposal)
 
     # ── Execution ────────────────────────────────────────────────────────────
+
+    def _perform(self, action: Action) -> str:
+        """A virtual method completes without touching the world."""
+        if action.method in self.virtual:
+            return action.args.get("reason", "") or f"declined: {action}"
+        return self._execute(action)
 
     def _call_store(self, action: Action) -> str:
         method = getattr(self.store, action.method, None)

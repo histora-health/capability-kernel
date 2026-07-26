@@ -211,12 +211,14 @@ technically legal and every argument is in the permitted vocabulary.
     │  Firmware          Rule(trigger,check,enforce)│  block · inspect · substitute
     │    ├── authority   predicates over state     │
     │    ├── ordering    phase predicates          │
-    │    └── operand     reference.check(...)      │  ← the addition
+    │    └── operand     operand.check(...)        │  ← the addition
     └────┬─────────────────────────────────────────┘
          │  block → refused    inspect → proposal
     ┌────▼─────────────────────────────────────────┐
     │  Interface         propose-and-confirm       │  a person sees the named target
     └────┬─────────────────────────────────────────┘
+         │  confirmed        virtual methods stop here — a `decline`
+         │                   completes without touching the world
          │
     ┌────▼─────────────────────────────────────────┐
     │  Store             executes, journals, audits│
@@ -329,9 +331,16 @@ measured.
 
 ### Experiment — `experiments/mask/`
 
-Sampler-level enforcement, kept runnable with its measurements. The argument for
-this architecture is that the mask did not carry it, and that argument is only
-checkable if the mask still runs.
+Sampler-level enforcement, kept runnable with its measurements and its own 39
+tests. The argument for this architecture is that the mask did not carry it, and
+that argument is only checkable if the mask still runs.
+
+It sits outside `src/` deliberately. While it lived inside the package, the
+package docstring opened by claiming that an unauthorised action is unemittable
+— the retired thesis, stated as the product claim, on the first line anyone
+reads. A boundary in the directory tree states the status without depending on
+anyone reading a docstring. See `experiments/mask/README.md` for what each of
+its three claims turned into.
 
 ---
 
@@ -418,6 +427,28 @@ history has hundreds, and the ceiling has been named but not measured.
 ---
 
 ## 10. Changelog
+
+**2026-07-26** — Structure brought in line with this document, and one bug it
+surfaced.
+
+`experiments/mask/` is specified in §6 and had never been created; the sampler
+code was still inside the package and the README already claimed otherwise. Now
+moved, with its tests, its benchmarks and its two results files. The package
+docstring is rewritten — it opened by stating the *retired* thesis as the
+product claim.
+
+`reference.py` is deleted. It was a shim kept while the logic moved to
+`resolvers` and `firmware.operand`, and nothing but its own tests still imported
+it; those tests now target the real modules, so coverage is unchanged.
+
+**The bug:** `decline` is declared virtual in every domain — "no store method
+behind it, completing it changes nothing" — but `Runtime` executed it against
+the store anyway, and `ClinicalStore` has no `decline`. Both case benchmarks had
+quietly worked around it, one with a special case in its `execute` and one by
+adding a fake `decline` to its store. That is precisely the pretending the
+`execute` parameter exists to avoid, so `virtual` is now a `Runtime` concept and
+the workarounds are gone. Found by writing `examples/03_the_agent.py`, which is
+an argument for examples that run the real path rather than a simplified one.
 
 **2026-07-26** — M5 done, and two of the gates turned out to be measuring the
 wrong thing.

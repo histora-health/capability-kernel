@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .compiler import CompiledSurface
-from .trie import SlotState
+from compiler import CompiledSurface
+from trie import SlotState
 
 NEG_INF = -float("inf")
 

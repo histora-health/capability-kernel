@@ -162,8 +162,6 @@ class Inbox:
         self.journal.append(f"export {target}")
         return f"exported {incoming.name!r}"
 
-    def decline(self, target: str, reason: str) -> str:
-        return reason
 
 
 def _entities(store: Inbox) -> list[Entity]:

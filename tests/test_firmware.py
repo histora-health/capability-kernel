@@ -208,3 +208,18 @@ def test_only_rules_for_this_trigger_run(store):
     ]
     Runtime(store, rules).evaluate(Action("rename", {"target": "f_pano"}), ctx())
     assert fired == ["before"]
+
+
+def test_a_virtual_method_completes_without_touching_the_store(runtime, store):
+    """`decline` changes nothing, so committing one must not look for it on the
+    store. `ClinicalStore` has no `decline` and must not need one — a store that
+    grows a fake method to satisfy the runtime is the runtime's bug."""
+    assert not hasattr(store, "decline")
+    before = list(store.journal)
+
+    proposal = runtime.propose(
+        Action("decline", {"target": "std_hyg", "reason": "the study is signed"}),
+        Context(request="Rename the hygiene study."))
+
+    assert runtime.commit(proposal) == "the study is signed"
+    assert list(store.journal) == before

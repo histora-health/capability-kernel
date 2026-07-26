@@ -5,19 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "capability-kernel"
 version = "0.1.0"
-description = "Capabilities applied at the sampler — an agent cannot emit an action it is not authorised to take."
+description = "A firmware layer between what a clinical agent proposes and what the world executes."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = []
 
 [project.optional-dependencies]
-hf = ["transformers>=5.5", "torch", "accelerate"]
-# The enforced arm. Only llama-cpp-python exposes a logits processor, which is
-# the single hook that gives enforcement, per-state recomputation and the
-# rejected probability mass in one place.
-enforced = ["llama-cpp-python>=0.3", "numpy>=1.24"]
-# The tokenizer parity check needs a real tokenizer, not real weights.
-parity = ["tokenizers>=0.15"]
+# Running a local model: the production path and both case benchmarks.
+local = ["llama-cpp-python>=0.3", "numpy>=1.24"]
+# experiments/mask/ only — the retired sampler arm, kept runnable so the
+# measurement that retired it can still be reproduced.
+mask = ["transformers>=5.5", "torch", "accelerate", "tokenizers>=0.15"]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
@@ -26,3 +24,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+# experiments/mask/tests runs separately: it needs the [mask] extras and imports
+# its modules by bare name, which only works from inside that directory.
+norecursedirs = ["experiments"]

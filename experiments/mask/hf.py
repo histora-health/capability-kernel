@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .compiler import ARM, CompiledSurface
-from .processor import CapabilityProcessor, Telemetry
+from compiler import ARM, CompiledSurface
+from processor import CapabilityProcessor, Telemetry
 
 
 class HFCapabilityProcessor:

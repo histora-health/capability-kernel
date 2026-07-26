@@ -282,7 +282,8 @@ def test_auditing_does_not_count_as_progress():
     """
     import inspect
 
-    from capability_kernel import chat
+    import sys; sys.path.insert(0, "experiments/mask")
+    import chat
 
     src = inspect.getsource(chat.EnforcedChat.send)
     assert 'executed.method != "audit"' in src, \
