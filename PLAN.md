@@ -72,6 +72,29 @@ fields. If the PoC ships, a surface syntax is a later question.
 
 ## What we add, and the measurement that justifies each
 
+### 0. The program narrows; the model chooses once
+
+Not an addition so much as a design law, taken from `token-trie`'s own
+`CLAUDE.md` §4.2 and validated there on a 350M model:
+
+> The LLM-CPU is a ratifier, not a planner. If you find yourself making the LLM
+> decide something the Program could compute, push it down into the Program.
+
+It is stated here because it has a latency consequence that is easy to miss.
+Case A chains — tooth, then surface, then code — and if each step is a model
+call that is three round trips per coded procedure. Measured at ~2s per turn on
+gemma4:12b through llama.cpp, that is six seconds for something a dentist does
+several times per consultation, and the product dies there.
+
+Once the tooth is dictated the program already knows which surfaces exist and
+which codes are valid. It does not need to ask three times; it presents the
+final set once. The audit note can likewise be generated from the action rather
+than requested from the model.
+
+**One model call per proposed action.** This is a constraint on the design, not
+an optimisation to apply afterwards, and it is the same law that removes the
+substitution failure.
+
 ### 1. An option surface derived from state
 
 Not as a security argument — AgentSpec's predicates already cover that. As a
@@ -125,6 +148,10 @@ things, so the model is kept inside a vocabulary rather than denied something.
 Silent substitution should largely not arise, and if it does anyway that is a
 finding.
 
+**And why it is the case with a product argument.** Dictating *"obturación
+oclusal en el 36"* and receiving a coded procedure is faster than navigating a
+coding tree. That is a real saving against a real alternative.
+
 ### Case B — Study ingestion and filing
 
 **Permission constraints, and the live injection surface.** Studies arrive from
@@ -142,6 +169,13 @@ attacker controls.
 
 **Why this case is unfavourable, deliberately.** It is where the first phase
 measured every failure. If the additions hold here they hold anywhere.
+
+**It is the validation case, not the product case, and the distinction matters.**
+Filing a study competes with dragging a file, which is already fast. An
+assistant that parses a sentence, proposes an action and waits for confirmation
+may well be slower than the thing it replaces. That is not an architecture
+problem and no amount of enforcement fixes it — it is why the friction gate
+exists, and why Case A leads.
 
 ---
 
@@ -197,7 +231,7 @@ Both cases against the gates, on a model that runs on a clinic workstation.
 
 ## The gates, decided in advance
 
-Three numbers, and the third is the one that usually gets forgotten.
+Four numbers, and the last two are the ones that get forgotten.
 
 **Coverage.** The fraction of real requests that end in a correct proposed
 action without a retry. This is what the first phase showed to be the actual
@@ -211,8 +245,16 @@ exists to guarantee, and the failure nobody else is measuring.
 for confirmation on everything is not deployable, and finding that out after
 building it is the expensive way.
 
-If coverage and operand hold and friction does not, the problem is UX rather
-than architecture, and we will know which.
+**Latency.** p95 per proposed action, measured end to end rather than per model
+call — because the design permits one call per action and the gate has to be
+what catches it if that slips.
+
+Measured baseline, for reference: gemma4:12b through llama.cpp with a warm model
+answers in ~2s per turn (median 1.8s unmasked, 3.0s masked; 14.6s one-time
+load). Anything that turns one action into three calls fails this gate.
+
+If coverage and operand hold and friction or latency does not, the problem is UX
+rather than architecture, and we will know which.
 
 ---
 
