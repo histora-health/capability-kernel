@@ -1,0 +1,364 @@
+# Architecture
+
+A living document. It describes what this is, what it borrows, what it adds,
+every block it is made of, and how it is used. It is updated as the project
+moves, and the changelog at the end records what changed and why.
+
+---
+
+## 1. The problem
+
+A clinical records assistant that runs on a small local model inside the
+customer's perimeter, because the data cannot leave it.
+
+That constraint changes the objective. With a frontier model over an API the
+question is what the model knows; with a small local model the question is what
+you can guarantee about what it emits. Both matter, but only the second is
+solvable by architecture.
+
+The failure that matters is not the one people expect. It is not the agent
+deleting a record — a validator catches that. It is the agent doing something
+*legal* that nobody asked for, on a record nobody named, and reporting success.
+
+---
+
+## 2. What EAT called this, and why it did not work
+
+The [Evolving Agents Toolkit](https://github.com/EvolvingAgentsLabs/evolving-agents)
+had a governance layer named **Firmware**. Its implementation:
+
+```python
+self.base_firmware = """
+You are an AI agent operating under strict governance rules:
+- Never use dangerous imports (os, subprocess, etc.)
+"""
+```
+
+A string in a system prompt. The decomposition was right — a system-level
+control layer distinct from the agent's reasoning is the correct shape — and the
+substrate did not exist. This repository is the attempt to give it one.
+
+---
+
+## 3. State of the art
+
+The field moved substantially through 2026. Four lines are active, and we sit
+inside them rather than beside them.
+
+### Runtime enforcement with a rule language
+
+**[AgentSpec](https://cposkitt.github.io/files/publications/agentspec_llm_enforcement_icse26.pdf)**
+(ICSE 2026) — a domain-specific language for runtime constraints:
+
+```
+rule <id>
+  trigger: before an action | on a state change | on task completion
+  check:   a conjunction of predicates
+  enforce: user inspection | self-reflection | a predefined action
+end
+```
+
+Evaluated across code agents, embodied agents and autonomous driving. Prevents
+over 90% of unsafe executions in code agents, eliminates all hazardous actions
+in embodied tasks, with millisecond overhead. Rules are authored or
+LLM-generated for human review; predicates can read state; enforcement hooks
+into the agent's decision pipeline before execution.
+
+**This is the closest published work to what we need, and we adopt its model.**
+
+### Policy enforcement at the harness and OS level
+
+**[ActPlane](https://arxiv.org/pdf/2606.25189)** — programmable OS-level policy
+enforcement for agent harnesses. Complementary rather than competing: it governs
+what the harness process may do, we govern what the agent may propose.
+
+### Capability systems for agents
+
+**[Lingering Authority](https://arxiv.org/pdf/2606.22504)** — revocable
+resource-and-effect capabilities for coding agents. The classical capability
+model applied to agents, with the emphasis on revocation.
+
+### Constrained decoding, now commodity
+
+vLLM and SGLang compile JSON Schema into finite-state machines and apply a
+vocabulary mask at each decoding step. There is an open
+[RFC in vLLM](https://github.com/vllm-project/vllm/issues/39848) for
+*region-scoped guided decoding* — grammar applied only inside the tool-call
+region, free generation outside it — which is the same hybrid design this
+repository implemented independently, being standardised upstream.
+
+**[Constraint Tax in Open-Weight LLMs](https://arxiv.org/html/2606.25605v1)**
+measures what that costs: under simultaneous schema constraints and tool
+calling, open-weight models stop invoking tools entirely, with a five-mode
+taxonomy of suppression behaviours.
+
+### And the industrial frame
+
+Anthropic's Zero Trust for AI agents, DeepMind's AI Control Roadmap, and the
+NIST NCCoE concept paper (February 2026) on agent identity and authorization.
+
+---
+
+## 4. What we adopt, and what we add
+
+### Adopted
+
+**AgentSpec's rule model**, in shape rather than syntax. `trigger`, `check`,
+`enforce`, evaluated at the decision point. Rules are Python objects with
+callable predicates — a surface language exists so non-engineers can author
+rules, which is premature for a proof of concept.
+
+**`user inspection` as a first-class enforcement action.** Propose-and-confirm
+is in the literature; it is not a concession we invented because the model was
+unreliable.
+
+**Enforcement at the decision point rather than the sampler.** Our own
+measurements agree: post-hoc validation was never defeated in any arm.
+
+**Constrained decoding stays upstream.** We do not maintain a mask when vLLM and
+SGLang ship one.
+
+### The design law
+
+From [`token-trie`](https://github.com/EvolvingAgentsLabs/token-trie)'s
+`CLAUDE.md` §4.2, validated there on a 350M model playing Tetris:
+
+> The LLM-CPU is a ratifier, not a planner. If you find yourself making the LLM
+> decide something the Program could compute, push it down into the Program.
+
+**One model call per proposed action.** This is a hard constraint, not an
+optimisation. It is what keeps latency inside budget, and it is the same law
+that removes the substitution failure — a model that never chooses an operand
+cannot choose the wrong one.
+
+### Added, each because a measurement demanded it
+
+**An option surface derived from live state.** Argued on usability, not
+security: AgentSpec's predicates already cover the security case. Every
+rejection costs a retry, and retries are what a small model cannot do — 14
+malformed outputs in 30 turns, 0 of 10 tasks completed.
+
+**Operand verification as a rule type.** AgentSpec's rules reason about the
+action; this one reasons about the relation between the action and the request.
+It is the only defence that caught silent substitution, and it is absent from
+the work reviewed.
+
+---
+
+## 5. What the first phase measured
+
+All of it is in `benchmarks/`, with raw data.
+
+| | |
+|---|---|
+| Writes reaching a closed record, all four arms | **0** |
+| Legitimate tasks completed, unmasked / masked | **0 of 10 / 10 of 10** |
+| Malformed outputs, unmasked / masked | 14 / 0 |
+| Silent substitution, masked | 5 of 20 and 3 of 12 |
+| Substitution under adversarial phrasing | **0 of 20** |
+| Substitution under ordinary clerical phrasing | **5 of 5** |
+| Latency, gemma4:12b via llama.cpp, warm | ~2s per turn |
+
+Four instruments over the model's internal state failed to detect the
+substitution, on a rig whose positive control passes
+(`docs/WHAT_DID_NOT_WORK.md`).
+
+**Silent substitution** is what we call the failure: constrained decoding forces
+the model to always choose a valid option, so when the requested record is
+blocked it keeps the intent, substitutes a permitted target, and executes on the
+wrong record. No schema or validator detects it, because the action is
+technically legal and every argument is in the permitted vocabulary.
+
+---
+
+## 6. The blocks
+
+```
+    user request
+         │
+    ┌────▼─────────────────────────────────────────┐
+    │  Domain            manifest + store          │  what exists, what may be done
+    └────┬─────────────────────────────────────────┘
+         │
+    ┌────▼─────────────────────────────────────────┐
+    │  Option surface    tool_schemas(store)       │  the tools for THIS turn
+    │                    enabled_methods(store)    │  the methods for THIS phase
+    └────┬─────────────────────────────────────────┘
+         │
+    ┌────▼─────────────────────────────────────────┐
+    │  Model             one call, native tools    │  chooses; never plans
+    └────┬─────────────────────────────────────────┘
+         │  proposed action
+    ┌────▼─────────────────────────────────────────┐
+    │  Firmware          Rule(trigger,check,enforce)│  block · inspect · substitute
+    │    ├── authority   predicates over state     │
+    │    ├── ordering    phase predicates          │
+    │    └── operand     reference.check(...)      │  ← the addition
+    └────┬─────────────────────────────────────────┘
+         │  block → refused    inspect → proposal
+    ┌────▼─────────────────────────────────────────┐
+    │  Interface         propose-and-confirm       │  a person sees the named target
+    └────┬─────────────────────────────────────────┘
+         │
+    ┌────▼─────────────────────────────────────────┐
+    │  Store             executes, journals, audits│
+    └──────────────────────────────────────────────┘
+```
+
+### Domain — `store.py`, `manifest.py`
+
+The world and what may be done to it. A manifest declares methods and where
+each argument's legal values come from — a callable over the store, a fixed
+vocabulary, or free text.
+
+Values are **enumerated, not validated**. The surface does not contain "a
+filename"; it contains the filenames that exist.
+
+### Option surface — `manifest.tool_schemas`, `manifest.enabled_methods`
+
+Regenerated every turn. A signed record disappears from the enums the moment it
+is signed. `enabled_methods` is the phase function: which methods exist at all
+right now.
+
+This is what shrinks what the model can propose, which is what reduces
+rejections, which is what a small model cannot recover from.
+
+### Model — one call, native tool calling
+
+Chooses among enumerated options. It does not plan, and it does not construct
+operands the program could have computed.
+
+Backends behind one interface (`backends.py`): llama.cpp for quantised local
+weights, transformers for models llama.cpp cannot load — `gemma-4-E4B` reports
+720 of an expected 2131 tensors under llama.cpp, and it is the variant a clinic
+workstation runs.
+
+### Firmware — `firmware/` *(M0, in progress)*
+
+`Rule(trigger, check, enforce)` evaluated at the decision point, before
+execution. Three enforcement actions:
+
+- **block** — the action does not happen; the reason is returned
+- **inspect** — the action is proposed to a person rather than executed
+- **substitute** — a predefined action replaces the proposed one
+
+Three rule families:
+
+- **authority** — predicates over state; a signed record may not be modified
+- **ordering** — phase predicates; export only after anonymisation confirms
+- **operand** — the addition; the target must correspond to what was asked
+
+### Operand verification — `reference.py`
+
+String overlap between the entity's name and the words of the request. It
+suffices because someone asking for "the perio chart" uses the words in
+`perio_chart.pdf`.
+
+Four details, each found by a failing test rather than by reasoning: name and id
+are scored separately, because pooling let `std` and `hyg` dilute a study called
+*Hygiene* below threshold; words naming more than one entity are ignored,
+because `std_` made every study a candidate; matching is by prefix from four
+characters, because clinicians write "panoramic" and the file is
+`pano_march.dcm`; and the referent is plural, because a move names what to move
+*and* where.
+
+It **reports rather than corrects**. A guard that corrected silently would be
+making clinical decisions by string similarity.
+
+If paraphrase or cross-language reference breaks it — Spanish dictation against
+English filenames is the likely case in Histora — the interface is open for
+[EmbeddingGemma](https://ai.google.dev/gemma/docs/embeddinggemma/inference-embeddinggemma-with-sentence-transformers)
+via sentence-transformers, and for the dual-embedding resolver in
+`evolving-memory`, which indexes each component twice: once for what it *is*,
+once for what it is *for*.
+
+### Interface — propose-and-confirm
+
+The assistant structures and proposes; a person sees the **named** target and
+confirms. Not caution in general — the specific case where it is needed was
+measured.
+
+### Experiment — `experiments/mask/`
+
+Sampler-level enforcement, kept runnable with its measurements. The argument for
+this architecture is that the mask did not carry it, and that argument is only
+checkable if the mask still runs.
+
+---
+
+## 7. How it is used
+
+```python
+from capability_kernel import demo_store
+from capability_kernel.firmware import Runtime, Rule
+
+store = demo_store()
+runtime = Runtime(store, rules=[
+    Rule("closed_record",  trigger="before_action",
+         check=lambda a, s, _: s.get(a.target) and s.is_closed(a.target),
+         enforce="block"),
+    Rule("audit_first",    trigger="before_action",
+         check=lambda a, s, _: s.pending_audit and a.method != "audit",
+         enforce="block"),
+    Rule("operand_matches", trigger="before_action",
+         check=lambda a, s, ctx: reference.check(s, ctx.request, a.target),
+         enforce="inspect"),
+])
+
+proposal = runtime.propose(request="mové la ficha periodontal a ortodoncia")
+# → Proposal(action=..., verdict="inspect", reason="the request refers to …")
+# the interface shows the named target; a person confirms
+runtime.commit(proposal)
+```
+
+The API above is the M0 target and will be corrected here once it exists.
+
+---
+
+## 8. Why this is a production option
+
+**Latency.** gemma4:12b through llama.cpp answers in ~2s per turn warm, with a
+14.6s one-time load. The one-call constraint keeps a proposed action at one
+round trip, so that number is the budget rather than a fraction of it.
+
+**Cost.** Zero marginal. A Q4 12B is about 8GB and runs on a consulting-room
+workstation. No API, no per-token billing, no data leaving the perimeter.
+
+**Model options.** gemma4:12b local is the candidate. `gemma-4-E4B` is the
+alternative if coverage falls short — more capable at native tool calling, same
+machine, transformers backend. A 26B or 31B in the customer's own cloud is worth
+measuring as a ceiling for coverage, not as a deployment path.
+
+**Failure behaviour.** Every failure mode is either blocked, proposed for
+inspection, or logged. The one that used to be silent has a rule.
+
+---
+
+## 9. What is not validated
+
+Stated here so it is not discovered late.
+
+**Coverage.** The whole design rests on native tool calling working well enough
+on a local model, and the evidence is one anecdotal observation. The 0-of-10
+figure was measured with a text protocol, which is a different thing. This is
+the first question the PoC answers.
+
+**Friction.** Filing a study competes with dragging a file, which is already
+fast. An assistant that parses a sentence and waits for confirmation may be
+slower than what it replaces. Procedure coding has the better product argument
+— dictating beats navigating a coding tree — which is why it leads.
+
+**Operand verification at scale.** String overlap, tested on three measured
+substitutions. In production a guard that blocks legitimate work gets switched
+off, and false positives have not been measured.
+
+**Enumeration at scale.** A demo folder has seven entities. A real clinical
+history has hundreds, and the ceiling has been named but not measured.
+
+---
+
+## 10. Changelog
+
+**2026-07-26** — Created. Records the state of the art as surveyed, the adoption
+of AgentSpec's rule model, the two additions and the measurements behind them,
+and the block layout as planned for M0.
