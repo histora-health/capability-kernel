@@ -232,14 +232,33 @@ vocabulary, or free text.
 Values are **enumerated, not validated**. The surface does not contain "a
 filename"; it contains the filenames that exist.
 
-### Option surface — `manifest.tool_schemas`, `manifest.enabled_methods`
+### Option surface — `domain.py`
 
-Regenerated every turn. A signed record disappears from the enums the moment it
-is signed. `enabled_methods` is the phase function: which methods exist at all
-right now.
+A `Domain` is a value: its methods, where each argument's legal values come
+from, and a phase function saying which methods exist right now. Everything the
+surface does is a method on it, computed from a store passed in — which is what
+lets two domains share one process and keeps `Domain` from assuming the clinical
+store's shape.
 
-This is what shrinks what the model can propose, which is what reduces
+Regenerated every turn. A signed record leaves the enums the moment it is
+signed. This is what shrinks what the model can propose, which reduces
 rejections, which is what a small model cannot recover from.
+
+**Chained arguments.** An argument source takes `(store)` or `(store, chosen)`,
+where `chosen` is what has been decided already. Which surfaces a tooth has
+depends on the tooth; which codes are valid depends on the surface.
+
+That dependency has a consequence for how a chained method reaches the model. A
+JSON Schema cannot express it, so computing each enum independently would offer
+an occlusal surface on an incisor. **A chained method is therefore offered as a
+single enumerated choice over the combinations that exist** — the program
+computes them, the model picks one, and the result is valid by construction in
+one call rather than three. Three round trips per coded procedure is six seconds
+at the measured ~2s per turn, for something a dentist does several times per
+consultation.
+
+`MAX_COMBINATIONS` refuses loudly above 400. Enumeration has a ceiling, and a
+schema with ten thousand enum values is a worse failure than a refused one.
 
 ### Model — one call, native tool calling
 
@@ -386,6 +405,20 @@ history has hundreds, and the ceiling has been named but not measured.
 ---
 
 ## 10. Changelog
+
+**2026-07-26** — M1 done. `domain.py` makes a domain a value rather than a
+module of globals, and `odontogram.py` is the second one — enough to prove they
+coexist and to force out what a single domain never needed.
+
+Building it produced a requirement the design did not have: **chained
+arguments**. It also exposed that `tool_schemas` computed each argument
+independently, which for a chained method offers combinations that do not exist
+and which no JSON Schema can rule out. A chained method is now offered as one
+enumerated choice over real combinations, which is the design law applied where
+it also happens to save two round trips.
+
+The clinical manifest keeps its module-level names, delegating to the domain, so
+the six callers written before domains existed did not have to change at once.
 
 **2026-07-26** — M0 done. `firmware/` carries `Rule`, `Runtime`, `Proposal` and
 a decision `Journal` separate from the store's effect journal — a blocked action

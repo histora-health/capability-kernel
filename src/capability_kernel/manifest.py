@@ -20,8 +20,8 @@ may still say it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 
+from .domain import Domain, Method
 from .store import METADATA_KEYS, METADATA_VALUES, ClinicalStore
 
 #: There is no ``delete``. Deliberately: the clearest proof of the mechanism is
@@ -41,16 +41,6 @@ VIRTUAL = ("decline",)
 #: prevent. Auditing writes a note and changes nothing else, so forcing it costs
 #: nothing that declining would have protected.
 PHASED = ("audit",)
-
-@dataclass(frozen=True)
-class Method:
-    name: str
-    summary: str
-    #: arg name -> how its legal values are produced.
-    #: A callable takes the store and returns the enumerated values; a tuple is
-    #: a fixed vocabulary; ``None`` means free text (a slot, in trie terms).
-    args: dict
-
 
 def _ids(entities) -> list[str]:
     return [e.id for e in entities]
@@ -101,6 +91,8 @@ MANIFEST: dict[str, Method] = {
             "target": lambda s: _ids(s.renameable()),
             "name": None,
         },
+        arg_help={"name": "The new name. Letters, digits, spaces, dots, "
+                          "dashes, underscores."},
     ),
     "move": Method(
         name="move",
@@ -118,118 +110,49 @@ MANIFEST: dict[str, Method] = {
             "key": tuple(METADATA_KEYS),
             "value": None,
         },
+        arg_help={"value": "The value. Controlled vocabularies — "
+                  + "; ".join(f"{k}: {'|'.join(v)}" for k, v in METADATA_VALUES.items())
+                  + ". Other keys take free text."},
     ),
 }
 
 
-def enabled_methods(store: ClinicalStore) -> tuple[str, ...]:
-    """Which methods the current state permits — the phase controller.
+def _clinical_phase(store: ClinicalStore) -> tuple[str, ...] | None:
+    """The clinical domain's phase rule.
 
-    This is the piece that makes the surface a function of *sequence* rather
-    than only of contents. The trie still holds every opcode; the processor is
-    handed the subset this returns, so a method outside it has no reachable
-    path at this moment and regains one when the state moves.
-
-    One rule today, and it is enough to show the shape: an unrecorded change
-    admits nothing but recording it.
+    One rule, and it is enough to show the shape: an unrecorded change admits
+    nothing but recording it. Note that `decline` is excluded too — this is the
+    one place where refusing is unreachable, and it has to be, since a state you
+    can decline your way out of permits exactly what the rule prevents.
     """
     if store.pending_audit is not None:
         return ("audit",)
     return tuple(m for m in MANIFEST if m != "audit")
 
 
+#: The clinical domain, as a value. Everything below delegates to it, so the
+#: module-level names keep working for callers written before domains existed.
+CLINICAL = Domain(name="clinical", methods=MANIFEST,
+                  phase=_clinical_phase, virtual=VIRTUAL)
+
+
+def enabled_methods(store: ClinicalStore) -> tuple[str, ...]:
+    return CLINICAL.enabled_methods(store)
+
+
 def legal_values(store: ClinicalStore, method: str, arg: str) -> list[str] | None:
-    """The values ``arg`` may take right now, or ``None`` if it is free text."""
-    spec = MANIFEST[method].args[arg]
-    if spec is None:
-        return None
-    if callable(spec):
-        return list(spec(store))
-    return list(spec)
+    return CLINICAL.legal_values(store, method, arg)
 
 
 def tool_schemas(store: ClinicalStore) -> list[dict]:
-    """OpenAI-style tool definitions with enums drawn from the current store.
+    return CLINICAL.tool_schemas(store)
 
-    Regenerated on every turn. After a rename, the old id is gone from the
-    schema — which is the harness's approximation of the mask, and the reason
-    the two arms are comparable at all.
-    """
-    tools = []
-    allowed = enabled_methods(store)
-    for name, method in MANIFEST.items():
-        if name not in allowed:
-            # The baseline arm gets the same narrowing, or the comparison would
-            # be measuring the phase controller rather than the mask.
-            continue
-        properties: dict[str, dict] = {}
-        for arg in method.args:
-            values = legal_values(store, name, arg)
-            if values is None:
-                properties[arg] = {"type": "string", "description": _describe(name, arg)}
-            else:
-                properties[arg] = {"type": "string", "enum": values}
-
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": name,
-                "description": method.summary,
-                "parameters": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": list(method.args),
-                    "additionalProperties": False,
-                },
-            },
-        })
-    return tools
-
-
-def _describe(method: str, arg: str) -> str:
-    if method == "rename" and arg == "name":
-        return "The new name. Letters, digits, spaces, dots, dashes, underscores."
-    if method == "set_metadata" and arg == "value":
-        allowed = "; ".join(f"{k}: {'|'.join(v)}" for k, v in METADATA_VALUES.items())
-        return f"The value. Controlled vocabularies — {allowed}. Other keys take free text."
-    return "A value."
 
 
 def opcode_strings(store: ClinicalStore, method: str) -> list[str]:
-    """Every complete call this method can currently express, as text.
-
-    This is what the trie is built from in the enforced arm. Arguments that are
-    free text are emitted as a ``{slot}`` marker for the compiler to turn into a
-    trie slot rather than an enumeration.
-
-    Exposed here rather than in the compiler so that both arms provably share
-    one definition of "legal".
-    """
-    method_def = MANIFEST[method]
-    combos: list[dict[str, str]] = [{}]
-
-    for arg in method_def.args:
-        values = legal_values(store, method, arg)
-        nxt = []
-        for combo in combos:
-            if values is None:
-                nxt.append({**combo, arg: "{slot}"})
-            else:
-                for v in values:
-                    nxt.append({**combo, arg: v})
-        combos = nxt
-
-    return [
-        method + "(" + ", ".join(f"{k}={v}" for k, v in combo.items()) + ")"
-        for combo in combos
-    ]
+    return CLINICAL.opcode_strings(store, method)
 
 
 def surface_size(store: ClinicalStore) -> dict[str, int]:
-    """How many distinct calls each method can express right now.
+    return CLINICAL.surface_size(store)
 
-    Worth watching: enumeration has a ceiling, and a folder with ten thousand
-    files would blow it. Reporting the number is how you find out before a demo
-    does.
-    """
-    return {m: len(opcode_strings(store, m)) for m in MANIFEST}
