@@ -285,7 +285,7 @@ Three rule families:
 - **ordering** — phase predicates; export only after anonymisation confirms
 - **operand** — the addition; the target must correspond to what was asked
 
-### Operand verification — `reference.py`
+### Operand verification — `firmware/operand.py`, `resolvers.py`
 
 String overlap between the entity's name and the words of the request. It
 suffices because someone asking for "the perio chart" uses the words in
@@ -302,12 +302,24 @@ characters, because clinicians write "panoramic" and the file is
 It **reports rather than corrects**. A guard that corrected silently would be
 making clinical decisions by string similarity.
 
-If paraphrase or cross-language reference breaks it — Spanish dictation against
-English filenames is the likely case in Histora — the interface is open for
+**The resolver is a separate thing from the rule**, because the rule's logic is
+settled and the resolver's is not. Resolvers work over `(id, name)` pairs rather
+than store objects, so one written for the clinical domain works on the
+odontogram — nothing in the rule knows about teeth, and nothing in `Odontogram`
+knows about resolvers.
+
+A fifth detail, found by running the rule on the second domain: **numeric
+identifiers carry reference**. FDI names a tooth in two digits, and dropping
+short tokens as noise dropped the only word in a dictation that identified the
+record — so the rule allowed a procedure on any tooth at all.
+
+When paraphrase or cross-language reference breaks it — Spanish dictation
+against English filenames is the likely case — the swap is
 [EmbeddingGemma](https://ai.google.dev/gemma/docs/embeddinggemma/inference-embeddinggemma-with-sentence-transformers)
-via sentence-transformers, and for the dual-embedding resolver in
-`evolving-memory`, which indexes each component twice: once for what it *is*,
-once for what it is *for*.
+via sentence-transformers, or the dual-embedding resolver in `evolving-memory`
+which indexes each component twice: once for what it *is*, once for what it is
+*for*. Neither is written yet, deliberately — a resolver added before it is
+needed is one whose failure modes nobody has seen.
 
 ### Interface — propose-and-confirm
 
@@ -405,6 +417,17 @@ history has hundreds, and the ceiling has been named but not measured.
 ---
 
 ## 10. Changelog
+
+**2026-07-26** — M2 done. Operand verification is a rule built by
+`operand_rule(nameable, resolver=...)`, with resolution split into
+`resolvers.py` behind a protocol. The domain supplies how its records are named,
+because only it knows.
+
+Running it on the odontogram found that the lexical resolver could not resolve a
+tooth at all: FDI is two digits and short tokens were dropped as noise, so a
+dictation saying "el 36" named nothing and the rule allowed a procedure on any
+tooth. That is the second requirement the second domain produced, and the
+argument for having built one.
 
 **2026-07-26** — M1 done. `domain.py` makes a domain a value rather than a
 module of globals, and `odontogram.py` is the second one — enough to prove they

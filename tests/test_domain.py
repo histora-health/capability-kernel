@@ -137,3 +137,84 @@ def test_the_ceiling_refuses_loudly():
     many = Odontogram(teeth={str(i): Tooth(str(i)) for i in range(30, 130)})
     with pytest.raises(ValueError, match="over the ceiling"):
         ODONTOGRAM.tool_schemas(many)
+
+
+# ── The operand rule, on a domain it was not written for ─────────────────────
+
+
+def test_the_same_rule_works_on_a_second_domain(odo):
+    """The reason the resolver takes (id, name) pairs rather than store objects.
+
+    Nothing in `operand_rule` knows about teeth, and nothing in `Odontogram`
+    knows about resolvers.
+    """
+    from capability_kernel.firmware import Action, Context, Runtime
+    from capability_kernel.firmware.operand import operand_rule
+    from capability_kernel.odontogram import odontogram_entities
+
+    runtime = Runtime(odo, [operand_rule(odontogram_entities, exempt=("decline",))],
+                      execute=lambda a: "recorded")
+    dictation = "obturación oclusal en el 17"
+
+    right = runtime.evaluate(
+        Action("record_procedure", {"target": "17", "tooth": "17",
+                                    "surface": "occlusal", "code": "D2391"}),
+        Context(request=dictation))
+    wrong = runtime.evaluate(
+        Action("record_procedure", {"target": "15", "tooth": "15",
+                                    "surface": "occlusal", "code": "D2391"}),
+        Context(request=dictation))
+
+    assert right.allowed
+    assert wrong.needs_inspection
+
+
+def test_a_two_digit_tooth_number_carries_reference(odo):
+    """The length filter made every tooth invisible.
+
+    FDI names a tooth in two digits, and dropping short tokens as noise dropped
+    the only word in the dictation that identified the record. The rule then
+    allowed a procedure on any tooth at all — found by running it on this
+    domain, which is what this domain is for.
+    """
+    from capability_kernel.odontogram import odontogram_entities
+    from capability_kernel.resolvers import DEFAULT
+
+    named = DEFAULT.candidates(odontogram_entities(odo), "obturación en el 17")
+    assert [r.entity.id for r in named] == ["17"]
+
+
+def test_an_absent_tooth_still_resolves(odo):
+    """It cannot be acted on and must still be nameable.
+
+    Same reason closed records resolve in the clinical domain: a dictation
+    about tooth 16 has to be recognisable as being about tooth 16, or the rule
+    cannot tell a substitution from a request it did not understand.
+    """
+    from capability_kernel.odontogram import odontogram_entities
+    from capability_kernel.resolvers import DEFAULT
+
+    named = DEFAULT.candidates(odontogram_entities(odo), "algo en el 16")
+    assert [r.entity.id for r in named] == ["16"]
+    assert "16" not in ODONTOGRAM.legal_values(odo, "record_procedure", "tooth")
+
+
+def test_the_resolver_is_swappable_without_touching_the_rule(odo):
+    """The split exists because the rule is settled and the resolver is not."""
+    from capability_kernel.firmware import Action, Context, Runtime
+    from capability_kernel.firmware.operand import operand_rule
+    from capability_kernel.odontogram import odontogram_entities
+
+    class NeverResolves:
+        def candidates(self, entities, message):
+            return []
+
+    runtime = Runtime(odo, [operand_rule(odontogram_entities,
+                                         resolver=NeverResolves(),
+                                         exempt=("decline",))],
+                      execute=lambda a: "recorded")
+    # A resolver that names nothing cannot object to anything, which is the
+    # correct behaviour rather than a degenerate one.
+    assert runtime.evaluate(
+        Action("record_procedure", {"target": "15"}),
+        Context(request="obturación oclusal en el 17")).allowed

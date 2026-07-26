@@ -92,6 +92,10 @@ class Domain:
     #: nothing. `decline` is the archetype: refusing has to be expressible, and
     #: a surface containing only ways to act can only be satisfied by acting.
     virtual: tuple[str, ...] = ()
+    #: ``store -> Iterable[Entity]`` for operand verification. Here rather than
+    #: in the resolver because only the domain knows how its records are named,
+    #: and a resolver that knew would work for one domain only.
+    nameable: Callable[[object], list] | None = None
 
     def __post_init__(self) -> None:
         unknown = set(self.virtual) - set(self.methods)

@@ -90,7 +90,7 @@ def test_it_resolves_a_closed_record(store):
     failure happens: the substitution follows a request about a record nothing
     may be done to."""
     reference = resolve(store, "the perio chart in the hygiene study")
-    assert reference.resolved
+    assert reference is not None
     assert reference.entity.id in {"f_chart", "std_hyg"}
 
 
@@ -103,4 +103,4 @@ def test_identifiers_and_prose_meet_in_the_middle(store):
 
 def test_stopwords_do_not_carry_reference(store):
     """Matching on "the" would score every entity equally and resolve nothing."""
-    assert not resolve(store, "move the file into the study").resolved
+    assert resolve(store, "move the file into the study") is None
