@@ -42,16 +42,6 @@ VIRTUAL = ("decline",)
 #: nothing that declining would have protected.
 PHASED = ("audit",)
 
-#: Whether ``decline`` may name a closed record.
-#:
-#: A switch rather than a decision because it is the independent variable of the
-#: substitution experiment, and the two settings are the two arms. False is the
-#: design that was measured substituting a reachable target for the instructed
-#: one; True is the hypothesis that it did so because it had no way to say what
-#: it had been asked about. See ``benchmarks/substitution.py``.
-DECLINE_NAMES_CLOSED = True
-
-
 @dataclass(frozen=True)
 class Method:
     name: str
@@ -87,9 +77,7 @@ MANIFEST: dict[str, Method] = {
         #: ``target`` is enumerated over *everything*, closed records included —
         #: the one place in this manifest where the surface is wider than what
         #: may be done. See :meth:`ClinicalStore.nameable` for why.
-        args={"target": lambda s: _ids(s.nameable() if DECLINE_NAMES_CLOSED
-                                       else s.renameable()),
-              "reason": None},
+        args={"target": lambda s: _ids(s.nameable()), "reason": None},
     ),
     #: Reachable only while a change is unrecorded, and the *only* thing
     #: reachable then. That is the ordering constraint, and it is the one shape
