@@ -16,7 +16,54 @@ run here.
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Protocol
+
+
+#: Gemma 4 wraps a call in `<|tool_call>` … `<tool_call|>` and quotes each
+#: argument with `<|"|>`, which is neither the OpenAI shape nor JSON. Kept as a
+#: pattern rather than hardcoded into one backend because both runtimes hit it:
+#: llama.cpp leaves it in content, and transformers hands back whatever the chat
+#: template produced.
+_GEMMA_CALL = re.compile(r"call:\s*(\w+)\s*\{(.*?)\}", re.S)
+_GEMMA_ARG = re.compile(r"(\w+)\s*:\s*<\|\"\|>(.*?)<\|\"\|>", re.S)
+
+
+def parse_tool_calls(text: str) -> list[dict]:
+    """Recover tool calls a runtime did not normalise.
+
+    Tries the model-specific form first and falls back to balanced JSON, which
+    is what most templates emit. Returns the OpenAI shape either way, so the
+    agent loop never learns which model it is talking to.
+    """
+    calls = []
+    for name, body in _GEMMA_CALL.findall(text):
+        args = {k: v.strip() for k, v in _GEMMA_ARG.findall(body)}
+        if not args:
+            # Some turns quote nothing. `key: value` per comma is the only
+            # other shape observed, and guessing further would invent calls.
+            args = {k.strip(): v.strip()
+                    for k, _, v in (p.partition(":") for p in body.split(","))
+                    if k.strip() and v.strip()}
+        calls.append({"function": {"name": name, "arguments": json.dumps(args)}})
+
+    if calls:
+        return calls
+
+    for chunk in _json_objects(text):
+        try:
+            obj = json.loads(chunk)
+        except json.JSONDecodeError:
+            continue
+        name = obj.get("name") or obj.get("function")
+        if isinstance(name, str) and name:
+            calls.append({"function": {
+                "name": name,
+                "arguments": json.dumps(obj.get("arguments")
+                                        or obj.get("parameters") or {}),
+            }})
+    return calls
 
 
 class Backend(Protocol):
@@ -27,7 +74,21 @@ class Backend(Protocol):
 
     def generate(self, prompt: str, *, processor, max_tokens: int,
                  temperature: float, stop: list[str]) -> str:
-        """Continue `prompt`. `processor` is None for the unmasked arm."""
+        """Continue `prompt`. `processor` is None for the unmasked arm.
+
+        Used by the mask experiment, which needs a text protocol because a
+        logits processor has nowhere to attach in a chat-completion API.
+        """
+        ...
+
+    def chat(self, messages: list[dict], tools: list[dict], *,
+             temperature: float, max_tokens: int) -> dict:
+        """One turn of native tool calling.
+
+        The production path. Returns ``{"content": str, "tool_calls": [...]}``
+        in the OpenAI shape, because that is what both runtimes emit and what
+        the agent loop reads.
+        """
         ...
 
 
@@ -51,6 +112,27 @@ class LlamaBackend:
                          logits_processor=(LogitsProcessorList([processor])
                                            if processor is not None else None))
         return out["choices"][0]["text"]
+
+
+    def chat(self, messages, tools, *, temperature, max_tokens) -> dict:
+        out = self.llama.create_chat_completion(
+            messages=messages, tools=tools or None,
+            tool_choice="auto" if tools else None,
+            temperature=temperature, max_tokens=max_tokens)
+        message = (out.get("choices") or [{}])[0].get("message") or {}
+        content = message.get("content") or ""
+        calls = message.get("tool_calls") or []
+
+        # llama.cpp normalises the formats it knows and returns the rest as
+        # content. Gemma 4 emits its own, so a correct call arrives looking like
+        # a refusal — measured: the model chose a valid combination on the
+        # dictated tooth and the turn was scored as producing nothing.
+        if not calls and content:
+            calls = parse_tool_calls(content)
+            if calls:
+                content = ""
+
+        return {"content": content, "tool_calls": calls}
 
 
 class HFBackend:
@@ -94,3 +176,40 @@ class HFBackend:
             if marker in text:
                 text = text.split(marker)[0]
         return text
+
+    def chat(self, messages, tools, *, temperature, max_tokens) -> dict:
+        """Native tool calling through the chat template.
+
+        transformers renders tools into the prompt and the model emits a call in
+        whatever form its template defines, so the parsing is model-specific in
+        a way llama.cpp's server hides. Gemma emits a JSON object; anything else
+        is returned as content and the agent loop treats it as prose, which is
+        the correct outcome for a model that declined to call a tool.
+        """
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tools=tools or None, tokenize=False,
+            add_generation_prompt=True)
+        text = self.generate(prompt, processor=None, max_tokens=max_tokens,
+                             temperature=temperature, stop=[])
+
+        calls = parse_tool_calls(text)
+        return {"content": "" if calls else text.strip(), "tool_calls": calls}
+
+
+def _json_objects(text: str):
+    """Balanced top-level ``{...}`` spans, in order.
+
+    A regex cannot do this — arguments nest — and a model that wrote prose
+    around its call would defeat a strict json.loads of the whole reply.
+    """
+    depth, start = 0, None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield text[start:i + 1]
+                start = None

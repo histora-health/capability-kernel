@@ -24,10 +24,17 @@ from .domain import Domain, Method
 ANTERIOR_SURFACES = ("mesial", "distal", "buccal", "lingual", "incisal")
 POSTERIOR_SURFACES = ("mesial", "distal", "buccal", "lingual", "occlusal")
 
-#: A stand-in for the payer's nomenclador. The real one is loaded per country
-#: and per date; what matters structurally is that it is keyed by surface, so a
-#: code valid on an occlusal surface is not offered on an incisal one.
-CODES: dict[str, tuple[str, ...]] = {
+#: A value set: which procedure codes are billable on which surface.
+#:
+#: Keyed by surface because that is the structural fact — a code for a
+#: multi-surface posterior restoration is not billable on an incisal edge — and
+#: because keying it this way is what lets the surface narrow the codes.
+#:
+#: Real deployments load this per payer and per date. `ValueSet` exists so that
+#: swapping the nomenclador is swapping a file rather than editing a manifest,
+#: which is the whole claim about codes: a hallucinated one is a rejected claim,
+#: and enumeration makes the rate zero by construction rather than by review.
+DEFAULT_CODES: dict[str, tuple[str, ...]] = {
     "occlusal": ("D2391", "D2392", "D2140"),
     "incisal":  ("D2330", "D2331"),
     "mesial":   ("D2331", "D2140"),
@@ -35,6 +42,41 @@ CODES: dict[str, tuple[str, ...]] = {
     "buccal":   ("D2332",),
     "lingual":  ("D2332",),
 }
+
+#: What each code means, for the proposal a person confirms. A person approving
+#: `D2391` is approving a string; approving "one-surface posterior composite" is
+#: approving a procedure.
+CODE_NAMES: dict[str, str] = {
+    "D2140": "amalgam, one surface",
+    "D2330": "resin composite, one surface, anterior",
+    "D2331": "resin composite, two surfaces, anterior",
+    "D2332": "resin composite, three surfaces, anterior",
+    "D2391": "resin composite, one surface, posterior",
+    "D2392": "resin composite, two surfaces, posterior",
+}
+
+
+@dataclass
+class ValueSet:
+    """The codes in force for a payer, keyed by surface.
+
+    A class rather than a dict so that loading one is an explicit act with a
+    name attached to it. Which payer's codes were in force is the first thing
+    asked when a claim is rejected.
+    """
+
+    payer: str
+    by_surface: dict[str, tuple[str, ...]]
+
+    def for_surface(self, surface: str) -> tuple[str, ...]:
+        return self.by_surface.get(surface, ())
+
+    def describe(self, code: str) -> str:
+        return CODE_NAMES.get(code, code)
+
+    @classmethod
+    def default(cls) -> "ValueSet":
+        return cls(payer="default", by_surface=dict(DEFAULT_CODES))
 
 
 @dataclass
@@ -68,6 +110,7 @@ class Odontogram:
 
     teeth: dict[str, Tooth] = field(default_factory=dict)
     journal: list[str] = field(default_factory=list)
+    value_set: ValueSet = field(default_factory=ValueSet.default)
 
     def present_teeth(self) -> list[str]:
         """Teeth that can carry a procedure.
@@ -82,12 +125,26 @@ class Odontogram:
         return tooth.surfaces if tooth and tooth.present else ()
 
     def codes_for(self, surface: str) -> tuple[str, ...]:
-        return CODES.get(surface, ())
+        return self.value_set.for_surface(surface)
 
     def record(self, tooth: str, surface: str, code: str) -> str:
         entry = f"{code} on {tooth} {surface}"
         self.journal.append(entry)
-        return f"recorded {entry}"
+        return f"recorded {self.value_set.describe(code)} on tooth {tooth}, {surface}"
+
+    def decline(self, reason: str) -> str:
+        return reason
+
+    def describe(self) -> str:
+        """The dentition, for the model's context."""
+        present = ", ".join(self.present_teeth())
+        missing = ", ".join(t.fdi for t in self.teeth.values() if not t.present)
+        lines = [f"Teeth present: {present}"]
+        if missing:
+            lines.append(f"Missing: {missing}")
+        if self.journal:
+            lines.append("Recorded so far: " + "; ".join(self.journal))
+        return "\n".join(lines)
 
     def get(self, fdi: str) -> Tooth | None:
         """Present so a domain-agnostic runtime can resolve a target."""

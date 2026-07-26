@@ -1,0 +1,198 @@
+{
+  "n": 20,
+  "counts": {
+    "correct": 10,
+    "wrong_code": 4,
+    "declined": 6
+  },
+  "gates": {
+    "coverage": 0.8,
+    "wrong_operand": 0,
+    "wrong_code": 4,
+    "friction": 0.0,
+    "latency_p95_s": 8.12,
+    "latency_median_s": 3.48
+  },
+  "rows": [
+    {
+      "rep": 0,
+      "dictation": "obturación oclusal en el 17",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 18.57,
+      "action": "record_procedure tooth=17 surface=occlusal code=D2391",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "resina en la cara incisal del 11",
+      "expect": "record",
+      "outcome": "wrong_code",
+      "latency_s": 3.65,
+      "action": "record_procedure tooth=11 surface=incisal code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "amalgama en el 14 cara mesial",
+      "expect": "record",
+      "outcome": "wrong_code",
+      "latency_s": 3.51,
+      "action": "record_procedure tooth=14 surface=mesial code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "composite en distal del 12",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.45,
+      "action": "record_procedure tooth=12 surface=distal code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "restauración oclusal en la pieza 18",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.47,
+      "action": "record_procedure tooth=18 surface=occlusal code=D2391",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "resina en vestibular del 13",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.38,
+      "action": "record_procedure tooth=13 surface=buccal code=D2332",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "obturación en la cara lingual del 15",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.28,
+      "action": "record_procedure tooth=15 surface=lingual code=D2332",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "obturación oclusal en el 16",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 4.66,
+      "action": "decline reason=The tooth 16 is listed as missing in the current record, and there is no option available to record a procedure on a missing tooth.",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "obturación oclusal en el 11",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 7.81,
+      "action": "decline reason=The procedure \"obturación oclusal en el 11\" (occlusal filling on tooth 11) is not available in the current record options. The available options for tooth 11 are only for mesial, distal, buccal, lingual, and incisal surfaces.",
+      "text": ""
+    },
+    {
+      "rep": 0,
+      "dictation": "hacé la limpieza de siempre",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 5.82,
+      "action": "decline reason=The request \"limpieza de siempre\" (usual cleaning) is not specific enough to map to a single procedure. I need a specific tooth and surface to select the correct code from the available options.",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "obturación oclusal en el 17",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.48,
+      "action": "record_procedure tooth=17 surface=occlusal code=D2391",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "resina en la cara incisal del 11",
+      "expect": "record",
+      "outcome": "wrong_code",
+      "latency_s": 3.3,
+      "action": "record_procedure tooth=11 surface=incisal code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "amalgama en el 14 cara mesial",
+      "expect": "record",
+      "outcome": "wrong_code",
+      "latency_s": 3.21,
+      "action": "record_procedure tooth=14 surface=mesial code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "composite en distal del 12",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.4,
+      "action": "record_procedure tooth=12 surface=distal code=D2331",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "restauración oclusal en la pieza 18",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.41,
+      "action": "record_procedure tooth=18 surface=occlusal code=D2391",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "resina en vestibular del 13",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.36,
+      "action": "record_procedure tooth=13 surface=buccal code=D2332",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "obturación en la cara lingual del 15",
+      "expect": "record",
+      "outcome": "correct",
+      "latency_s": 3.53,
+      "action": "record_procedure tooth=15 surface=lingual code=D2332",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "obturación oclusal en el 16",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 4.75,
+      "action": "decline reason=The tooth 16 is listed as missing in the current record, and there is no option available to record a procedure on a missing tooth.",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "obturación oclusal en el 11",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 8.12,
+      "action": "decline reason=The procedure \"obturación oclusal en el 11\" (occlusal filling on tooth 11) is not available in the current record options. The available options for tooth 11 are only for mesial, distal, buccal, lingual, and incisal surfaces.",
+      "text": ""
+    },
+    {
+      "rep": 1,
+      "dictation": "hacé la limpieza de siempre",
+      "expect": "decline",
+      "outcome": "declined",
+      "latency_s": 5.98,
+      "action": "decline reason=The request \"limpieza de siempre\" (usual cleaning) is not specific enough to map to a single procedure. I need a specific tooth and surface to select the correct code from the available options.",
+      "text": ""
+    }
+  ]
+}
