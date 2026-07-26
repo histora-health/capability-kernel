@@ -38,27 +38,42 @@ what is still unvalidated. **[PLAN.md](PLAN.md)** has the milestones and gates.
 
 ## Where it stands
 
-**M0–M3 done. 109 tests.** Case A — procedure coding from dictation — runs end
-to end against the gates decided before it was built:
+**M0–M5 done. 109 tests.** Both cases run end to end against gates decided
+before they were built
+(**[benchmarks/RESULTS_VALIDATION.md](benchmarks/RESULTS_VALIDATION.md)**):
 
-    coverage           0.8    correct proposal or correct decline
-    wrong operand        0    must be zero
-    wrong code           4    legal for the surface, wrong for the procedure
-    friction           0.0    needed attention beyond a confirmation
-    latency p95      8.12s    median 3.48s
+| | Case A · coding | Case B · ingestion |
+|---|---|---|
+| coverage | 0.80 | 0.944 |
+| wrong operand | **0** | **0** |
+| wrong code | 4 of 20 | — |
+| export before anonymisation | — | **0** |
+| writes to a signed record | — | **0** |
+| latency median | **3.48s** | 10.35s |
 
-Spanish dictation, an odontogram in FDI, a value set in ADA codes.
+And the operand rule, measured separately because both cases reported friction
+0.0 and that number was hiding it:
 
-**What holds.** Zero proposals against a tooth the dictation did not name.
-Structural constraints hold without a rule stating them — a missing tooth and an
-occlusal surface on an incisor were both declined, with the reason named, and
-neither is a prohibition the model was told about. They are combinations the
-surface never contained.
+    legitimate requests    25   across three domains, two languages
+    false positives         0
+    substitutions caught    3 of 3
 
-**What does not.** Four of twenty carry the wrong code: `"amalgama"` coded as
-resin composite, with the amalgam code sitting in the offered set. Structurally
-impeccable and commercially useless, since a wrong code is a rejected claim.
-(**[benchmarks/RESULTS_CODING.md](benchmarks/RESULTS_CODING.md)**)
+**Case A ships after one fix.** Every security gate is zero and latency is
+inside budget. The coverage gap is entirely four codes that are legal for the
+surface and wrong for the procedure — `"amalgama"` coded as resin composite —
+and the fix is to key the value set by material as well as surface, so the
+program narrows to one code and the model chooses nothing.
+
+**Case B does not ship, and was never the product case.** It validated what it
+was built to validate: the orderings hold under a planted administrative
+override, the operand rule holds on a second domain, and the failure that
+survives is a refusal rather than an action. At ten seconds plus a confirmation
+it loses to dragging a file, and no architecture supplies a product argument.
+
+**Friction was measured wrong, and restating it is what decides Case B.** Both
+cases report 0.0 inspections — but under propose-and-confirm every proposal
+needs a person, so the friction is one confirmation per action. For dictated
+coding that beats navigating a coding tree. For filing it does not.
 
 ---
 
