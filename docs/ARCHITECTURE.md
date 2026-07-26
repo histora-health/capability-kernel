@@ -92,6 +92,24 @@ measures what that costs: under simultaneous schema constraints and tool
 calling, open-weight models stop invoking tools entirely, with a five-mode
 taxonomy of suppression behaviours.
 
+### Independent corroboration of the failure
+
+**[Bad Memory](https://arxiv.org/pdf/2607.14611)** (Gadgil et al., University of
+Washington) evaluated memory-borne prompt injection against Claude Code and
+OpenAI Codex across Haiku 4.5, Opus 4.7, GPT-5.2 and GPT-5.5. Three planted
+goals: credential exfiltration, unauthorised tool use, and brand promotion.
+
+The first two are the overtly malicious class. The third is the one that
+matters here — in their words it *"resembles a legitimate user preference"*,
+giving the agent the least signal to distinguish a stored preference from a
+planted directive — **and it produced their highest attack success rate**.
+
+Different models, different domain, different mechanism, and the same shape as
+the failure measured in §5: what survives every defence is the request that
+looks legitimate. Their recommendation includes policy tiers so low-trust
+content cannot override behavioural constraints, which is the layer this
+document describes.
+
 ### And the industrial frame
 
 Anthropic's Zero Trust for AI agents, DeepMind's AI Control Roadmap, and the
@@ -233,7 +251,7 @@ weights, transformers for models llama.cpp cannot load — `gemma-4-E4B` reports
 720 of an expected 2131 tensors under llama.cpp, and it is the variant a clinic
 workstation runs.
 
-### Firmware — `firmware/` *(M0, in progress)*
+### Firmware — `firmware/` *(M0, done)*
 
 `Rule(trigger, check, enforce)` evaluated at the decision point, before
 execution. Three enforcement actions:
@@ -311,7 +329,17 @@ proposal = runtime.propose(request="mové la ficha periodontal a ortodoncia")
 runtime.commit(proposal)
 ```
 
-The API above is the M0 target and will be corrected here once it exists.
+That is the shape; the working call is `Runtime.propose(action, context)`
+returning a `Proposal`, and `Runtime.commit(proposal)` to execute one a person
+approved. `Runtime.run` does both for callers with nobody to ask, and refuses on
+an inspection rather than guessing.
+
+Two properties worth knowing before building on it. **A proposal executes
+nothing**, including when every rule passes — a caller that wants autonomy has
+to ask by calling `commit`, which is the right way round. And **commit
+re-evaluates**: between proposal and confirmation another user may have signed
+the study being renamed, and approving a proposal approves *that* action rather
+than a licence to run it against a state nobody saw.
 
 ---
 
@@ -358,6 +386,18 @@ history has hundreds, and the ceiling has been named but not measured.
 ---
 
 ## 10. Changelog
+
+**2026-07-26** — M0 done. `firmware/` carries `Rule`, `Runtime`, `Proposal` and
+a decision `Journal` separate from the store's effect journal — a blocked action
+leaves no trace in the data, and that is exactly the trace an audit wants. The
+three clinical rule families are wired with priorities so nobody is asked to
+inspect something that was going to be blocked. 17 tests, no model required.
+
+Also folded `BADMEMORY.md` into §3 as a corroboration section: it was written in
+the mask's vocabulary and its one load-bearing claim — that independent work on
+frontier models found the same shape, with the goal that "resembles a legitimate
+user preference" at their highest success rate — belongs beside the rest of the
+state of the art rather than in a file of its own.
 
 **2026-07-26** — Created. Records the state of the art as surveyed, the adoption
 of AgentSpec's rule model, the two additions and the measurements behind them,

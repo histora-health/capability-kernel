@@ -1,6 +1,8 @@
 # What was tried and did not work
 
-The code for these is not in the repository. It was removed because it produces
+**A closed line.** This documents a line of investigation that was closed, and it is kept because
+the operand rule in the architecture is the conclusion of these four failures
+rather than a design preference. The code for these is not in the repository. It was removed because it produces
 nothing usable, and leaving it would suggest otherwise. This file exists so the
 work is not repeated by someone reading only the parts that succeeded.
 
