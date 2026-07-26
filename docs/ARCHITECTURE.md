@@ -418,6 +418,34 @@ history has hundreds, and the ceiling has been named but not measured.
 
 ## 10. Changelog
 
+**2026-07-26** — M3 done, and the gates say something more useful than a pass.
+`agent.py` is the production loop: one model call, native tool calling, firmware
+at the decision point, nothing executed. `benchmarks/coding.py` measures it.
+
+Coverage 0.8, wrong operand 0, friction 0.0, latency median 3.48s and p95 8.12s.
+The operand gate holds across twenty proposals in a language the value set is
+not written in. Structural constraints hold without a rule stating them — a
+missing tooth and an occlusal surface on an incisor were both declined with the
+reason named, and neither is a prohibition the model was told about.
+
+**Four of twenty carry the wrong code.** Right tooth, right surface, wrong
+procedure: "amalgama" coded as composite, with the amalgam code sitting in the
+offered set. That is the substitution failure one level down — a legal option
+chosen for the wrong reason, on the code rather than the record — and it is what
+the case exists to sell against, since a wrong code is a rejected claim.
+
+The first version of the benchmark scored coverage at 1.0 because it checked
+only the tooth. Measuring the guard that was built rather than the product that
+was promised is the specific way this project has been wrong before.
+
+Two integration facts worth recording. **Gemma 4 emits a tool call in its own
+format** — `<|tool_call>call:name{arg:<|"|>value<|"|>}` — which llama.cpp does
+not normalise, so a correct call arrives as content and the turn reads as a
+refusal. `backends.parse_tool_calls` recovers it. And a chained method reaches
+the model as one `choice`, so the label it returns is expanded back into
+arguments against the enumerated set — a label not in that set means the model
+invented one, which is a failure rather than an argument to parse.
+
 **2026-07-26** — M2 done. Operand verification is a rule built by
 `operand_rule(nameable, resolver=...)`, with resolution split into
 `resolvers.py` behind a protocol. The domain supplies how its records are named,
