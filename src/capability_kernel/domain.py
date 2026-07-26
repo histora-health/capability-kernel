@@ -245,14 +245,17 @@ class Domain:
             args[key.strip()] = value.strip()
         return args
 
-    # ── Enumeration, for the mask experiment and for measuring the ceiling ───
+    # ── Enumeration, for inspecting the surface and measuring the ceiling ────
 
-    def opcode_strings(self, store, method: str) -> list[str]:
+    def action_strings(self, store, method: str) -> list[str]:
         """Every complete call this method can currently express.
 
-        Free-text arguments become a ``{slot}`` marker. Exposed so that the
-        experiment in `experiments/mask/` and the surface it enumerates provably
-        share one definition of legal.
+        Free-text arguments become a ``{slot}`` marker. For reading the surface
+        and for `surface_size`; nothing on the production path needs it, since
+        the model is given tool schemas rather than a list of strings.
+
+        (It used to be called ``opcode_strings``. An opcode was a path through
+        the token trie, and there is no trie on this path any more.)
         """
         return [f"{method}({_label(c)})"
                 for c in self.combinations(store, method)]
@@ -264,4 +267,4 @@ class Domain:
         and a real clinical history has hundreds, and enumeration has a ceiling
         that has been named and not measured.
         """
-        return {m: len(self.opcode_strings(store, m)) for m in self.methods}
+        return {m: len(self.action_strings(store, m)) for m in self.methods}

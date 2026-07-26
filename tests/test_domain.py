@@ -70,7 +70,7 @@ def test_codes_depend_on_the_surface(odo):
 def test_an_absent_tooth_is_not_an_option(odo):
     """Not a permission question — there is nothing there to treat."""
     assert "16" not in ODONTOGRAM.legal_values(odo, "record_procedure", "tooth")
-    assert not any("tooth=16" in c for c in ODONTOGRAM.opcode_strings(odo, "record_procedure"))
+    assert not any("tooth=16" in c for c in ODONTOGRAM.action_strings(odo, "record_procedure"))
 
 
 def test_chaining_is_detected(odo):
